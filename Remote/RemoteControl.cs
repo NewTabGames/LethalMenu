@@ -257,6 +257,7 @@ internal static class RemoteControl
 			{
 				Status = RemoteStatus.Connecting;
 				_ = firebase.Token;
+				DeleteLeftoverCode(firebase, token);
 				string device = "devices/" + firebase.Uid;
 				WaitForApproval(firebase, token);
 				if (token.IsCancellationRequested)
@@ -299,6 +300,33 @@ internal static class RemoteControl
 	/// <summary>Codes expire on the website side after 10 minutes; make a fresh one a bit before that.</summary>
 	private const double CodeLifetimeSeconds = 540.0;
 
+	/// <summary>
+	/// A code left in the database by a session that crashed or was closed while showing it. Codes stop working
+	/// after 10 minutes anyway; this just removes the leftover. Only this PC's own codes can be deleted.
+	/// </summary>
+	private static void DeleteLeftoverCode(FirebaseClient firebase, CancellationToken token)
+	{
+		RemoteConfig cfg = config;
+		if (cfg == null || string.IsNullOrEmpty(cfg.PendingCode))
+		{
+			return;
+		}
+		TryDelete(firebase, "pairCodes/" + cfg.PendingCode);
+		RememberCode(cfg, "", token);
+	}
+
+	/// <summary>Saves which code is in the database. Skipped once stopping: the settings file may already
+	/// belong to a new pairing (Reset Pairing), and an old copy must not be written over it.</summary>
+	private static void RememberCode(RemoteConfig cfg, string code, CancellationToken token)
+	{
+		if (cfg == null || token.IsCancellationRequested || cfg.PendingCode == code)
+		{
+			return;
+		}
+		cfg.PendingCode = code;
+		cfg.Save();
+	}
+
 	private static void WaitForApproval(FirebaseClient firebase, CancellationToken token)
 	{
 		if (IsApproved(firebase))
@@ -306,6 +334,7 @@ internal static class RemoteControl
 			return;
 		}
 		Status = RemoteStatus.WaitingForApproval;
+		RemoteConfig cfg = config;
 		string code = null;
 		DateTime codeMadeUtc = DateTime.MinValue;
 		try
@@ -319,6 +348,7 @@ internal static class RemoteControl
 						TryDelete(firebase, "pairCodes/" + code);
 					}
 					code = PublishNewCode(firebase);
+					RememberCode(cfg, code, token);
 					codeMadeUtc = DateTime.UtcNow;
 					PairCode = code;
 					Debug.Log("[LethalMenu] Remote panel: on the website press Add PC and enter code " + code);
@@ -335,6 +365,7 @@ internal static class RemoteControl
 			if (code != null)
 			{
 				TryDelete(firebase, "pairCodes/" + code);
+				RememberCode(cfg, "", token);
 			}
 			PairCode = null;
 		}

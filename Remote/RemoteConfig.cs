@@ -37,6 +37,11 @@ internal class RemoteConfig
 	[JsonProperty("refreshToken")]
 	public string RefreshToken = "";
 
+	/// <summary>The pairing code currently in the database, so it can be deleted next time if the game crashed
+	/// or was closed while showing it (otherwise it would stay in the database forever).</summary>
+	[JsonProperty("pendingCode")]
+	public string PendingCode = "";
+
 	[JsonIgnore]
 	public bool IsConfigured => !string.IsNullOrWhiteSpace(ApiKey) && !string.IsNullOrWhiteSpace(DatabaseUrl);
 
