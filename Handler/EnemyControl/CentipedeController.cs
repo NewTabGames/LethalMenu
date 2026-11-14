@@ -10,9 +10,14 @@ internal class CentipedeController : IEnemyController<CentipedeAI>, IController
 		return (object)enemy.clingingToPlayer != null || enemy.inSpecialAnimation || reflectionUtil.GetValue<bool>("clingingToDeadBody") || reflectionUtil.GetValue<bool>("clingingToCeiling") || reflectionUtil.GetValue<bool>("startedCeilingAnimationCoroutine") || reflectionUtil.GetValue<bool>("inDroppingOffPlayerAnim");
 	}
 
+	/// <summary>
+	/// It only grabs onto someone's head in its chase mode. Before, the only way into it was dropping from the
+	/// ceiling, so a Snare Flea walking on the ground could never attack. Now left click drops from the ceiling,
+	/// or on the ground switches to chase mode (then touch a player to grab their head).
+	/// </summary>
 	public void UsePrimarySkill(CentipedeAI enemy)
 	{
-		if (enemy.IsBehaviourState(CentipedeState.HIDING))
+		if (!enemy.IsBehaviourState(CentipedeState.CHASING) && !enemy.IsBehaviourState(CentipedeState.CLINGING) && enemy.clingingToPlayer == null)
 		{
 			enemy.SetBehaviourState(CentipedeState.CHASING);
 		}
@@ -37,9 +42,13 @@ internal class CentipedeController : IEnemyController<CentipedeAI>, IController
 		return !IsClingingToSomething(enemy);
 	}
 
-	public string GetPrimarySkillName(CentipedeAI _)
+	public string GetPrimarySkillName(CentipedeAI enemy)
 	{
-		return "Drop";
+		if (enemy.IsBehaviourState(CentipedeState.HIDING))
+		{
+			return "Drop";
+		}
+		return enemy.IsBehaviourState(CentipedeState.CHASING) ? "Attacking (touch a player)" : "Attack mode";
 	}
 
 	public string GetSecondarySkillName(CentipedeAI _)

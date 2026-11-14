@@ -1,4 +1,5 @@
 using GameNetcodeStuff;
+using LethalMenu.Util;
 
 namespace LethalMenu.Handler.EnemyControl;
 
@@ -26,6 +27,27 @@ internal class BushWolfController : IEnemyController<BushWolfEnemy>, IController
 		enemy.targetPlayer = player;
 		enemy.SwitchToBehaviourStateOnLocalClient((int)BushWolfState.ATTACKING);
 		enemy.SyncTargetPlayerAndAttackServerRpc((int)player.playerClientId);
+		// The tongue only kills once the fox has hauled the player back to its den. Like in the game, its own AI
+		// does that part: it takes over until the attack is over (eaten, or they got away), then you're back.
+		Cheats.EnemyControl.SetAIDriving(true);
+		draggingToDen = true;
+	}
+
+	/// <summary>Its AI is hauling someone back to the den for you (see <see cref="UsePrimarySkill"/>).</summary>
+	private bool draggingToDen;
+
+	public void Update(BushWolfEnemy enemy, bool isAIControlled)
+	{
+		if (draggingToDen && (!enemy.IsBehaviourState(BushWolfState.ATTACKING) || enemy.isEnemyDead))
+		{
+			draggingToDen = false;
+			Cheats.EnemyControl.SetAIDriving(false);
+		}
+	}
+
+	public void OnReleaseControl(BushWolfEnemy enemy)
+	{
+		draggingToDen = false;
 	}
 
 	public void UseSecondarySkill(BushWolfEnemy enemy)
@@ -43,7 +65,7 @@ internal class BushWolfController : IEnemyController<BushWolfEnemy>, IController
 
 	public string GetPrimarySkillName(BushWolfEnemy _)
 	{
-		return "Shoot tongue at nearest player";
+		return draggingToDen ? "Dragging them back to the den..." : "Shoot tongue (drags them to the den and eats them)";
 	}
 
 	public string GetSecondarySkillName(BushWolfEnemy _)

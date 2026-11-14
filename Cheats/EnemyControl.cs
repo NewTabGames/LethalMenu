@@ -75,6 +75,12 @@ internal class EnemyControl : Cheat
 
 	internal static bool YouAreSprinting => YouAreMoving && movement.IsSprinting;
 
+	/// <summary>Throws the monster you drive forward (a leap or lunge that's part of a skill).</summary>
+	internal static void Dash(Vector3 direction, float speed, float seconds)
+	{
+		movement?.Dash(direction, speed, seconds);
+	}
+
 	/// <summary>
 	/// What the camera is pointed at (the first thing hit that isn't the controlled monster itself), or a point
 	/// <paramref name="range"/> metres ahead when nothing is hit. For monsters that shoot where you aim.

@@ -6,9 +6,14 @@ namespace LethalMenu.Handler.EnemyControl;
 
 internal class ButlerController : IEnemyController<ButlerEnemyAI>, IController
 {
+	/// <summary>
+	/// Murder mode on / off. Outside it the Butler only has a 1-in-20 chance to stab someone it bumps into, once
+	/// every 10 seconds, and only its own AI ever switched it on, so a driven Butler could hardly hurt anyone.
+	/// In murder mode it pulls its knife and stabs whoever it touches, like in the game.
+	/// </summary>
 	public void UsePrimarySkill(ButlerEnemyAI enemy)
 	{
-		enemy.SyncSearchingMadlyServerRpc(isSearching: true);
+		enemy.SwitchToBehaviourState(enemy.currentBehaviourStateIndex == 2 ? 0 : 2);
 	}
 
 	// Sweeping used to only ever switch on (and the game kept flipping it on and off by itself every few
@@ -20,9 +25,9 @@ internal class ButlerController : IEnemyController<ButlerEnemyAI>, IController
 		enemy.SetSweepingAnimServerRpc(sweeping);
 	}
 
-	public string GetPrimarySkillName(ButlerEnemyAI _)
+	public string GetPrimarySkillName(ButlerEnemyAI enemy)
 	{
-		return "Search Mad";
+		return enemy.currentBehaviourStateIndex == 2 ? "Put the knife away" : "Murder mode (stabs on touch)";
 	}
 
 	public string GetSecondarySkillName(ButlerEnemyAI enemy)
