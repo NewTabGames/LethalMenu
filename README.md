@@ -26,6 +26,14 @@ All support to IcyRelic and Dustin, the creators of Lethal Menu. This is a fixed
   community's reference packages (`LethalCompany.GameLibs.Steam`, `BepInEx.Core`) instead. Download the DLL
   from the run's **Artifacts**.
 
+## Credits
+
+- **Original Lethal Menu:** [IcyRelic/LethalMenu](https://github.com/IcyRelic/LethalMenu), created by
+  [IcyRelic](https://github.com/IcyRelic) and [Dustin21335](https://github.com/Dustin21335), with
+  [everyone who contributed](https://github.com/IcyRelic/LethalMenu/graphs/contributors) to it.
+- **This version** (fixes, website remote panel, monster control and hunts): TyGamer4.
+- Built on [BepInEx](https://github.com/BepInEx/BepInEx) and [Harmony](https://github.com/pardeike/Harmony).
+
 ## Layout
 
 - `Cheats/`, `Handler/`, `Menu/`, ... the mod itself
