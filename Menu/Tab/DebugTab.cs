@@ -184,7 +184,7 @@ internal class DebugTab : MenuTab
 			l.Add((e.isEnemyDead ? "[dead] " : "") + e.ShownName() + " (" + e.GetType().Name + ")  |  state " + e.currentBehaviourStateIndex
 				+ (EnemyHunt.IsChasing(e) ? " (chasing)" : "")
 				+ "  |  owner " + (e.IsOwner ? "you" : e.OwnerClientId.ToString())
-				+ "  |  " + distance + "  |  " + (e.isOutside ? "outside" : "inside")
+				+ "  |  " + distance + "  |  " + (e.IsOutsideNow() ? "outside" : "inside")
 				+ "  |  " + (e.targetPlayer != null ? e.targetPlayer.playerUsername : "-")
 				+ (EnemyHunt.Find(e) != null ? "  |  HUNTING" : "")
 				+ ((object)EnemyControl.ControlledEnemy == e ? "  |  CONTROLLED" : ""));

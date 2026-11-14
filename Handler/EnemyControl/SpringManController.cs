@@ -1,32 +1,68 @@
+using HarmonyLib;
 using LethalMenu.Util;
+using Control = LethalMenu.Cheats.EnemyControl;
 
 namespace LethalMenu.Handler.EnemyControl;
 
+internal enum SpringManState
+{
+	ROAMING,
+	CHASING
+}
+
+/// <summary>
+/// CoilHead. Like in the game it freezes while a player looks at it, and kills whoever it runs into when it can
+/// move. Hold right click to move even while someone is looking.
+/// </summary>
 internal class SpringManController : IEnemyController<SpringManAI>, IController
 {
-	private bool GetStoppingMovement(SpringManAI enemy)
+	/// <summary>True while right click is held (read by <see cref="SpringManAIPatches"/>).</summary>
+	internal static bool HoldGo;
+
+	private static bool Stopped(SpringManAI enemy)
 	{
 		return enemy.Reflect().GetValue<bool>("stoppingMovement");
 	}
 
+	public void OnTakeControl(SpringManAI enemy)
+	{
+		HoldGo = false;
+		// Its roaming mode plays the walk all the time (it ran in place) and can't hurt anyone; its chase mode
+		// has the stop-when-seen rule and the kill on touch.
+		if (!enemy.IsBehaviourState(SpringManState.CHASING))
+		{
+			enemy.SetBehaviourState(SpringManState.CHASING);
+		}
+	}
+
+	public void OnReleaseControl(SpringManAI enemy)
+	{
+		HoldGo = false;
+	}
+
 	public void UseSecondarySkill(SpringManAI enemy)
 	{
-		enemy.SetAnimationGoServerRpc();
+		HoldGo = true;
+		if (Stopped(enemy))
+		{
+			enemy.SetAnimationGoServerRpc();
+		}
 	}
 
 	public void ReleaseSecondarySkill(SpringManAI enemy)
 	{
-		enemy.SetAnimationStopServerRpc();
+		// Let go: its own rule takes over again (it freezes the moment someone is looking).
+		HoldGo = false;
 	}
 
 	public bool IsAbleToMove(SpringManAI enemy)
 	{
-		return !GetStoppingMovement(enemy);
+		return HoldGo || !Stopped(enemy);
 	}
 
 	public bool IsAbleToRotate(SpringManAI enemy)
 	{
-		return !GetStoppingMovement(enemy);
+		return IsAbleToMove(enemy);
 	}
 
 	public float InteractRange(SpringManAI _)
@@ -41,6 +77,64 @@ internal class SpringManController : IEnemyController<SpringManAI>, IController
 
 	public string GetSecondarySkillName(SpringManAI _)
 	{
-		return "(HOLD) Move (it freezes again when you let go)";
+		return "(HOLD) Move while being watched";
+	}
+}
+
+/// <summary>Keeps a driven CoilHead in chase mode, honours the right-click hold, and walks only when you walk.</summary>
+[HarmonyPatch]
+internal static class SpringManAIPatches
+{
+	private static readonly AccessTools.FieldRef<SpringManAI, bool> StoppingMovement = AccessTools.FieldRefAccess<SpringManAI, bool>("stoppingMovement");
+
+	private static readonly AccessTools.FieldRef<SpringManAI, float> StopAndGoInterval = AccessTools.FieldRefAccess<SpringManAI, float>("stopAndGoMinimumInterval");
+
+	private static readonly AccessTools.FieldRef<SpringManAI, float> CurrentAnimSpeed = AccessTools.FieldRefAccess<SpringManAI, float>("currentAnimSpeed");
+
+	// Its AI step picks targets and switches between roaming and chasing; not while you drive it.
+	[HarmonyPrefix]
+	[HarmonyPatch(typeof(SpringManAI), nameof(SpringManAI.DoAIInterval))]
+	public static bool DoAIInterval(SpringManAI __instance)
+	{
+		if (!Control.IsDrivenByYou(__instance))
+		{
+			return true;
+		}
+		__instance.SyncPositionToClients();
+		return false;
+	}
+
+	[HarmonyPrefix]
+	[HarmonyPatch(typeof(SpringManAI), nameof(SpringManAI.Update))]
+	public static void UpdatePrefix(SpringManAI __instance)
+	{
+		if (!Control.IsDrivenByYou(__instance) || __instance.isEnemyDead)
+		{
+			return;
+		}
+		if (__instance.currentBehaviourStateIndex != (int)SpringManState.CHASING && __instance.IsOwner)
+		{
+			__instance.SwitchToBehaviourState((int)SpringManState.CHASING);
+		}
+		if (SpringManController.HoldGo)
+		{
+			// Every frame the game freezes it again if someone is looking; while held, it doesn't get to.
+			StopAndGoInterval(__instance) = 1f;
+			StoppingMovement(__instance) = false;
+		}
+	}
+
+	[HarmonyPostfix]
+	[HarmonyPatch(typeof(SpringManAI), nameof(SpringManAI.Update))]
+	public static void UpdatePostfix(SpringManAI __instance)
+	{
+		if (!Control.IsDrivenByYou(__instance) || __instance.isEnemyDead || __instance.creatureAnimator == null || StoppingMovement(__instance))
+		{
+			return;
+		}
+		// The game plays its walk at full speed whenever it may move; driven, only while you're moving.
+		float speed = Control.YouAreMoving ? (Control.YouAreSprinting ? 6f : 4.7f) : 0f;
+		CurrentAnimSpeed(__instance) = speed;
+		__instance.creatureAnimator.SetFloat("walkSpeed", speed);
 	}
 }

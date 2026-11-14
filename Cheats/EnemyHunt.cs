@@ -189,7 +189,7 @@ internal class EnemyHunt : Cheat
 
 	internal static bool SameArea(EnemyAI enemy, PlayerControllerB player)
 	{
-		return enemy.isOutside == !player.isInsideFactory;
+		return enemy.IsOutsideNow() == !player.isInsideFactory;
 	}
 
 	internal static string EnemyName(EnemyAI enemy)
@@ -234,7 +234,7 @@ internal class EnemyHunt : Cheat
 		}
 		if (!SameArea(enemy, player))
 		{
-			return EnemyName(enemy) + " is " + (enemy.isOutside ? "outside" : "inside") + " and " + player.playerUsername + " is " + (player.isInsideFactory ? "inside" : "outside") + "; it can't get there";
+			return EnemyName(enemy) + " is " + (enemy.IsOutsideNow() ? "outside" : "inside") + " and " + player.playerUsername + " is " + (player.isInsideFactory ? "inside" : "outside") + "; it can't get there";
 		}
 		return null;
 	}

@@ -347,7 +347,7 @@ internal static class RemoteCatalog
 						["name"] = Handler.EnemyAIExtensions.ShownName(enemy),
 						["type"] = enemy.GetType().Name,
 						["dead"] = enemy.isEnemyDead,
-						["inside"] = !enemy.isOutside,
+						["inside"] = !Handler.EnemyAIExtensions.IsOutsideNow(enemy),
 						["distance"] = local != null ? Math.Round(Vector3.Distance(local.transform.position, enemy.transform.position)) : 0.0,
 						["pos"] = map ? MapPos(enemy.transform.position) : null
 					});

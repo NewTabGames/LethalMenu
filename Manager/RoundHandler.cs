@@ -237,7 +237,7 @@ public class RoundHandler
 			}
 			else
 			{
-				HUDManager.Instance.DisplayTip("Lethal Menu", "There must be one Hoarding bug spawned");
+				HUDManager.Instance.DisplayTip("Lethal Menu", "There must be one Loot Bug spawned");
 			}
 			if (RoundManager.Instance.currentLevel.Enemies[i].enemyType.enemyName == "Hoarding bug")
 			{
@@ -516,6 +516,11 @@ public class RoundHandler
 		}
 		SelectableLevel currentLevel = StartOfRound.Instance.currentLevel;
 		currentLevel.maxEnemyPowerCount = int.MaxValue;
+		bool needsNest = type.requireNestObjectsToSpawn && type.nestSpawnPrefab != null;
+		if (needsNest)
+		{
+			outside = true; // monsters that start from a nest (the Old Bird) only exist outside
+		}
 		GameObject[] array = (outside ? RoundManager.Instance.outsideAINodes : RoundManager.Instance.insideAINodes);
 		List<Transform> nodes = new List<Transform>();
 		Array.ForEach(array, (GameObject obj) =>
@@ -531,8 +536,54 @@ public class RoundHandler
 			}
 			else
 			{
-				RoundManager.Instance.SpawnEnemyGameObject(transform.position, 0f, -1, type);
+				if (needsNest)
+				{
+					MakeFreeNest(type);
+				}
+				NetworkObjectReference spawned = RoundManager.Instance.SpawnEnemyGameObject(transform.position, 0f, -1, type);
+				if (spawned.TryGet(out NetworkObject networkObject) && networkObject.TryGetComponent(out EnemyAI enemy))
+				{
+					LethalMenu.Instance.StartCoroutine(StayOnSpawnSide(enemy, outside));
+				}
 			}
+		}
+	}
+
+	/// <summary>
+	/// The Old Bird (and any monster like it) has to start from a nest placed on the moon when the day begins. The
+	/// game deletes one that finds no free nest the moment it spawns, on every player's screen, so spawning one
+	/// did nothing on most moons and once the moon's nests were used. Places a new nest outside when there's no
+	/// free one, and tells the other players about it before the monster is spawned.
+	/// </summary>
+	private static void MakeFreeNest(EnemyType type)
+	{
+		RoundManager round = RoundManager.Instance;
+		round.enemyNestSpawnObjects.RemoveAll((EnemyAINestSpawnObject n) => n == null);
+		if (round.enemyNestSpawnObjects.Any((EnemyAINestSpawnObject n) => n.enemyType == type))
+		{
+			return;
+		}
+		round.SpawnNestObjectForOutsideEnemy(type, new System.Random());
+		NetworkObjectReference[] nests = round.enemyNestSpawnObjects
+			.Where((EnemyAINestSpawnObject n) => n != null && n.GetComponentInChildren<NetworkObject>() != null)
+			.Select((EnemyAINestSpawnObject n) => new NetworkObjectReference(n.GetComponentInChildren<NetworkObject>()))
+			.ToArray();
+		round.SyncNestSpawnObjectsOrderServerRpc(nests);
+	}
+
+	/// <summary>
+	/// The game decides inside or outside from the kind of monster, not from where it is: a Butler (or any other
+	/// inside monster) spawned outside still walked to inside spots it could never reach and ignored everyone
+	/// outside, and an outside monster spawned inside did the same in reverse. Once it has started up (that's
+	/// when the game sets this), tell it which side it is really on.
+	/// </summary>
+	private static IEnumerator StayOnSpawnSide(EnemyAI enemy, bool outside)
+	{
+		yield return null;
+		yield return null;
+		if (enemy != null && !enemy.isEnemyDead && enemy.isOutside != outside)
+		{
+			enemy.SetEnemyOutside(outside);
 		}
 	}
 

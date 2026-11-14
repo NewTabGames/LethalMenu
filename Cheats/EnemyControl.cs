@@ -70,6 +70,11 @@ internal class EnemyControl : Cheat
 	/// <summary>Flight for enemies that can fly (manticoils): no gravity, Space up, Ctrl down.</summary>
 	internal static bool IsFlying => movement != null && movement.Flying;
 
+	/// <summary>You're steering it with WASD right now (for monsters whose walk animation the menu sets).</summary>
+	internal static bool YouAreMoving => movement != null && movement.enabled && movement.IsMoving;
+
+	internal static bool YouAreSprinting => YouAreMoving && movement.IsSprinting;
+
 	internal static bool IsOnGround => movement == null || movement.IsGrounded;
 
 	internal static float VerticalSpeed => movement != null ? movement.VerticalVelocity : 0f;
@@ -127,6 +132,9 @@ internal class EnemyControl : Cheat
 	private static bool SecondaryHeld = false;
 
 	private static float BaseWalkSpeed = 4.5f;
+
+	/// <summary>Whether the controlled Maneater was grown up last frame (it grows while being driven).</summary>
+	private static bool wasAdult;
 
 	private static float nextOwnershipRequest;
 
@@ -372,8 +380,10 @@ internal class EnemyControl : Cheat
 		movement.SetNoClipMode(enabled: false);
 		movement.SetPosition(enemy.transform.position);
 		movement.CharacterSprintSpeed = SprintMultiplier();
+		movement.CanClimbLadders = enemy is MaskedPlayerEnemy; // walks and climbs like a player
 		mouse.SetYaw(enemy.transform.eulerAngles.y);
 		CalibrateForEnemy(enemy);
+		wasAdult = enemy is CaveDwellerAI d && d.adultContainer != null && d.adultContainer.activeSelf;
 		LungeCooldownRemaining = 0f;
 		PrimaryCooldownRemaining = 0f;
 		SecondaryCooldownRemaining = 0f;
@@ -486,6 +496,12 @@ internal class EnemyControl : Cheat
 			return;
 		}
 		UpdateCooldowns();
+		// A Maneater that grows up while you drive it: switch to the adult's speeds (and its bigger camera).
+		if (enemy is CaveDwellerAI dweller && dweller.adultContainer != null && dweller.adultContainer.activeSelf != wasAdult)
+		{
+			wasAdult = dweller.adultContainer.activeSelf;
+			CalibrateForEnemy(enemy);
+		}
 		// Ask the host to make us the owner only while we aren't, and at most 4 times a second: the answer takes
 		// a network round trip, and every extra request is another ownership change sent to every player.
 		if (enemy.IsSpawned && !enemy.IsOwner && Time.time >= nextOwnershipRequest)
@@ -508,6 +524,12 @@ internal class EnemyControl : Cheat
 			{
 				// Frozen enemies (mid-animation) must not keep sliding or dashing.
 				movement.enabled = !IsAIControlled && ableToMove;
+				// While the game moves it itself (a leap, clinging to someone, an animation), carry your position
+				// along so it isn't yanked back to where it started once you can move again.
+				if (!IsAIControlled && !ableToMove && (movement.transform.position - enemy.transform.position).sqrMagnitude > 0.0001f)
+				{
+					movement.SetPosition(enemy.transform.position);
+				}
 			}
 			if (!IsAIControlled && ableToMove)
 			{
@@ -590,9 +612,9 @@ internal class EnemyControl : Cheat
 			}
 			else if (enemy is CaveDwellerAI)
 			{
-				GameObject baby = t.Field("babyContainer").GetValue<GameObject>();
-				float chase = t.Field("chaseSpeed").GetValue<float>();
-				speeds = (baby != null && baby.activeSelf) ? (4f, 6.25f) : (6f, chase > 1f ? chase : 10f);
+				CaveDwellerAI dweller = (CaveDwellerAI)enemy;
+				bool adult = dweller.adultContainer != null && dweller.adultContainer.activeSelf;
+				speeds = adult ? (6f, dweller.chaseSpeed > 1f ? dweller.chaseSpeed : 10f) : (4f, 6.25f);
 			}
 		}
 		catch (Exception ex)

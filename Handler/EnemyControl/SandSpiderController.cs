@@ -4,15 +4,6 @@ namespace LethalMenu.Handler.EnemyControl;
 
 internal class SandSpiderController : IEnemyController<SandSpiderAI>, IController
 {
-	public void OnMovement(SandSpiderAI enemy, bool isMoving, bool isSprinting)
-	{
-		enemy.creatureAnimator.SetBool("moving", value: true);
-		float num = (isSprinting ? 8f : 6f);
-		enemy.agent.speed = num;
-		enemy.spiderSpeed = num;
-		enemy.SyncMeshContainerPositionToClients();
-	}
-
 	public void UsePrimarySkill(SandSpiderAI enemy)
 	{
 		PlaceWebTrap(enemy);

@@ -191,7 +191,7 @@ internal class EnemyTab : MenuTab
 		}
 		UI.Label("EnemyTab.SelectedPlayer", Settings.c_playerESP.AsString(text));
 		UI.Label("EnemyTab.Targeting", (enemy.targetPlayer == null) ? "None" : enemy.targetPlayer.playerUsername);
-		UI.Label("EnemyTab.Outside", enemy.isOutside.ToString());
+		UI.Label("EnemyTab.Outside", enemy.IsOutsideNow().ToString());
 		if (enemy is DressGirlAI dressGirlAI)
 		{
 			UI.Label("EnemyTab.Haunting", (dressGirlAI.hauntingPlayer == null) ? "None" : dressGirlAI.hauntingPlayer.playerUsername);

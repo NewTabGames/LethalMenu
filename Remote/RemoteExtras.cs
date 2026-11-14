@@ -187,9 +187,9 @@ internal static class RemoteExtras
 			Key = "StealItems", Name = "Steal Items Enemy", Tab = "Enemies", Group = "Enemies", Only = nameof(HoarderBugAI), Args = () => new JArray(Of("Enemy", "enemy")),
 			Run = (JArray a) =>
 			{
-				HoarderBugAI bug = EnemyArg(a[0]) as HoarderBugAI ?? throw new InvalidOperationException("Only Hoarding Bugs steal items");
+				HoarderBugAI bug = EnemyArg(a[0]) as HoarderBugAI ?? throw new InvalidOperationException("Only Loot Bugs steal items");
 				bug.StealAllItems();
-				return "Hoarding Bug is stealing every item";
+				return "Loot Bug is stealing every item";
 			}
 		},
 		new Extra
