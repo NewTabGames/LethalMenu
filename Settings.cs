@@ -626,7 +626,7 @@ internal class Settings
 		}
 	}
 
-	public static string version = "v1.0.0";
+	public static string version = "v1.0.1";
 
 	public static bool DebugMode = false;
 
