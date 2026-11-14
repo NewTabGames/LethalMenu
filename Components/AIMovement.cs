@@ -133,6 +133,21 @@ internal class AIMovement : MonoBehaviour
 		dashTimeRemaining = duration;
 	}
 
+	/// <summary>World direction of the W/A/S/D input relative to where you face (zero with no input or the cursor shown).</summary>
+	internal Vector3 SteerDirection()
+	{
+		if (Keyboard == null || Cursor.visible)
+		{
+			return Vector3.zero;
+		}
+		Vector2 input = Vector2.ClampMagnitude(new Vector2(Keyboard.dKey.ReadValue() - Keyboard.aKey.ReadValue(), Keyboard.wKey.ReadValue() - Keyboard.sKey.ReadValue()), 1f);
+		if (input.sqrMagnitude < 0.01f)
+		{
+			return Vector3.zero;
+		}
+		return Quaternion.Euler(0f, transform.eulerAngles.y, 0f) * new Vector3(input.x, 0f, input.y);
+	}
+
 	internal void CalibrateCollision(EnemyAI enemy)
 	{
 		if ((object)CharacterController != null)

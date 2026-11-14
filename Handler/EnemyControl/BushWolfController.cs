@@ -42,6 +42,13 @@ internal class BushWolfController : IEnemyController<BushWolfEnemy>, IController
 		{
 			draggingToDen = false;
 			Cheats.EnemyControl.SetAIDriving(false);
+			return;
+		}
+		// Its AI gives up dragging once it has dragged for 12 s and is still over 20 m from its den (or after
+		// 35 s), so a far den meant letting go halfway. Keep that clock low: it drags them all the way home.
+		if (draggingToDen && enemy.Reflect().GetValue<float>("shootTongueTimer") > 10f)
+		{
+			enemy.Reflect().SetValue("shootTongueTimer", 10f);
 		}
 	}
 

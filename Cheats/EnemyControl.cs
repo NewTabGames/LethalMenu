@@ -81,6 +81,9 @@ internal class EnemyControl : Cheat
 		movement?.Dash(direction, speed, seconds);
 	}
 
+	/// <summary>The direction you're steering (W/A/S/D relative to where you face), or zero when not steering.</summary>
+	internal static Vector3 SteerDirection => movement != null ? movement.SteerDirection() : Vector3.zero;
+
 	/// <summary>
 	/// What the camera is pointed at (the first thing hit that isn't the controlled monster itself), or a point
 	/// <paramref name="range"/> metres ahead when nothing is hit. For monsters that shoot where you aim.
@@ -642,19 +645,9 @@ internal class EnemyControl : Cheat
 			}
 			else if (enemy is ClaySurgeonAI barber)
 			{
-				// It moves only during each hop (jumpTime), with its speed set to jumpSpeed. Its walker starts every
-				// hop from a standstill and speeds up at its acceleration, so it covers far less ground than jumpSpeed
-				// for the whole hop; moving at full jumpSpeed made a driven Barber much faster than a player.
-				float v = barber.jumpSpeed;
-				float hopTime = Mathf.Max(barber.jumpTime, 0.05f);
-				float accel = barber.agent != null ? barber.agent.acceleration : 0f;
-				if (v > 0.5f)
-				{
-					float distance = accel <= 0.01f ? v * hopTime : (accel * hopTime < v ? 0.5f * accel * hopTime * hopTime : v * hopTime - v * v / (2f * accel));
-					float hop = Mathf.Clamp(distance / hopTime, 1.5f, v);
-					speeds = (hop, hop);
-				}
-				Debug.Log($"[LethalMenu] Barber hop: jumpSpeed {v}, jumpTime {barber.jumpTime}, acceleration {accel}, beat every {barber.currentInterval}s -> {speeds.Walk:0.00} m/s while hopping");
+				// It moves only during each hop, covering what the game's own hop covers (see ClaySurgeonController).
+				float hop = ClaySurgeonController.HopSpeed(barber, Mathf.Max(barber.jumpTime, 0.05f));
+				speeds = (hop, hop);
 			}
 			else if (enemy is RadMechAI mech)
 			{
@@ -665,7 +658,9 @@ internal class EnemyControl : Cheat
 			{
 				CaveDwellerAI dweller = (CaveDwellerAI)enemy;
 				bool adult = dweller.adultContainer != null && dweller.adultContainer.activeSelf;
-				speeds = adult ? (6f, dweller.chaseSpeed > 1f ? dweller.chaseSpeed : 10f) : (4f, 6.25f);
+				// The adult roams at 6 and chases at chaseSpeed; make sure it always outruns the baby (6.25).
+				speeds = adult ? (6f, Mathf.Max(dweller.chaseSpeed, 10f)) : (4f, 6.25f);
+				Debug.Log($"[LethalMenu] ManEater {(adult ? "adult" : "baby")}: chaseSpeed {dweller.chaseSpeed}, sneakSpeed {dweller.sneakSpeed}, leapSpeed {dweller.leapSpeed} -> walk {speeds.Walk}, run {speeds.Run}");
 			}
 		}
 		catch (Exception ex)
