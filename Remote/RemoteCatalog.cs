@@ -39,7 +39,7 @@ internal static class RemoteCatalog
 		("Self", "Voice Chat", "HearAllAlivePeople HearAllDeadPeople"),
 		("Self", "Facility & Ship", "UnlockAllDoors OpenAllBigDoors CloseAllBigDoors FixAllValves BridgeNeverFalls NoShipDoorClose OpenDropShipLand VoteShipLeaveEarly VehicleGodMode"),
 		("Players", "Player actions", "DeathNotifications SpectatePlayer MiniCam HealPlayer DemiGod KillPlayer LightningStrikePlayer SpiderWebPlayer ExplodeClosestMine LureAllEnemies TeleportAllEnemies ExplodeJetpack"),
-		("Enemies", "Enemies", "EnemyControl HuntPlayer PersistentHunt AggroHunt HuntWithAll StopAllHunts TeleportEnemyKillNearbyEnemies KillAllEnemies StunAllEnemies BreakAllWebs EnemyDeathNotifications"),
+		("Enemies", "Enemies", "EnemyControl HuntPlayer PersistentHunt AggroHunt HuntWithAll StopAllHunts TeleportEnemy KillNearbyEnemies KillAllEnemies StunAllEnemies BreakAllWebs EnemyDeathNotifications"),
 		("Visuals", "ESP style", "ToggleAllESP NameESP BoxESP"),
 		("Visuals", "People & Creatures", "PlayerESP BodyESP EnemyESP EnemyVentESP"),
 		("Visuals", "Loot", "ObjectESP ItemDropShipESP"),
@@ -93,7 +93,12 @@ internal static class RemoteCatalog
 			{
 				foreach (string name in hacks.Split(' '))
 				{
-					if (Enum.TryParse<Hack>(name, out var h) && !placements.ContainsKey(h))
+					if (!Enum.TryParse<Hack>(name, out var h))
+					{
+						// A typo here sends the feature to an "Other" tab on the website.
+						Debug.LogWarning("[LethalMenu] Remote layout: no feature called '" + name + "'");
+					}
+					else if (!placements.ContainsKey(h))
 					{
 						placements.Add(h, (tab, group, order++));
 					}
