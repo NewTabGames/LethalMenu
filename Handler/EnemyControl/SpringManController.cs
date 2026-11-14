@@ -27,6 +27,14 @@ internal class SpringManController : IEnemyController<SpringManAI>, IController
 	public void OnTakeControl(SpringManAI enemy)
 	{
 		HoldGo = false;
+		// After 9 s of moving it rests for 20 s, and only its AI counts that rest down. Its AI is paused while you
+		// drive it, so a rest that started under you never ended: it stood frozen with nobody looking, for good.
+		// Wake it if it is resting; while you drive it, it doesn't tire (see the patch below).
+		enemy.timeSpentMoving = 0f;
+		if (enemy.onCooldownPhase > 0f || enemy.Reflect().GetValue<bool>("setOnCooldown"))
+		{
+			enemy.SetCoilheadOnCooldownServerRpc(false);
+		}
 		// Its roaming mode plays the walk all the time (it ran in place) and can't hurt anyone; its chase mode
 		// has the stop-when-seen rule and the kill on touch.
 		if (!enemy.IsBehaviourState(SpringManState.CHASING))
@@ -38,6 +46,18 @@ internal class SpringManController : IEnemyController<SpringManAI>, IController
 	public void OnReleaseControl(SpringManAI enemy)
 	{
 		HoldGo = false;
+		// Hand it back ready to go: it re-checks right away whether anyone is looking, and starts a fresh 9 s
+		// before its next rest.
+		enemy.timeSpentMoving = 0f;
+		enemy.Reflect().SetValue("stopAndGoMinimumInterval", 0f);
+	}
+
+	public void Update(SpringManAI enemy, bool isAIControlled)
+	{
+		if (isAIControlled)
+		{
+			HoldGo = false;
+		}
 	}
 
 	public void UseSecondarySkill(SpringManAI enemy)
@@ -89,8 +109,6 @@ internal static class SpringManAIPatches
 
 	private static readonly AccessTools.FieldRef<SpringManAI, float> StopAndGoInterval = AccessTools.FieldRefAccess<SpringManAI, float>("stopAndGoMinimumInterval");
 
-	private static readonly AccessTools.FieldRef<SpringManAI, float> CurrentAnimSpeed = AccessTools.FieldRefAccess<SpringManAI, float>("currentAnimSpeed");
-
 	[HarmonyPrefix]
 	[HarmonyPatch(typeof(SpringManAI), nameof(SpringManAI.Update))]
 	public static void UpdatePrefix(SpringManAI __instance)
@@ -103,6 +121,8 @@ internal static class SpringManAIPatches
 		{
 			__instance.SwitchToBehaviourState((int)SpringManState.CHASING);
 		}
+		// No rest while you drive it: the rest is counted down by its AI, which is paused, so it would never end.
+		__instance.timeSpentMoving = 0f;
 		if (SpringManController.HoldGo)
 		{
 			// Every frame the game freezes it again if someone is looking; while held, it doesn't get to.
@@ -119,9 +139,10 @@ internal static class SpringManAIPatches
 		{
 			return;
 		}
-		// The game plays its walk at full speed whenever it may move; driven, only while you're moving.
+		// The game plays its walk at full speed whenever it may move; driven, only while you're moving. (Only the
+		// animation: its own speed value is left alone, since the spring "boing" when it freezes plays only when
+		// that value says it was moving fast.)
 		float speed = Control.YouAreMoving ? (Control.YouAreSprinting ? 6f : 4.7f) : 0f;
-		CurrentAnimSpeed(__instance) = speed;
 		__instance.creatureAnimator.SetFloat("walkSpeed", speed);
 	}
 }

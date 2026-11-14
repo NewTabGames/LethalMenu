@@ -186,6 +186,7 @@ internal class Patches
 					if (enemyType.enemyName == "Bush Wolf")
 					{
 						RoundHandler.SpawnBushWolf(enemyType);
+						continue;
 					}
 					RoundManager.Instance.SpawnEnemyGameObject(spawnPosition, 0f, -1, enemyType);
 				}

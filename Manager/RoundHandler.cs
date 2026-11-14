@@ -532,7 +532,12 @@ public class RoundHandler
 			Transform transform = nodes[UnityEngine.Random.Range(0, nodes.Count)];
 			if (type.enemyName == "Bush Wolf")
 			{
-				LethalMenu.Instance.StartCoroutine(SpawnBushWolf(type));
+				SpawnBushWolf(type);
+			}
+			else if (type.enemyPrefab != null && type.enemyPrefab.GetComponent<CadaverGrowthAI>() != null)
+			{
+				SpawnCadaverGrowth(type);
+				return; // there is only ever one
 			}
 			else
 			{
@@ -647,15 +652,154 @@ public class RoundHandler
 		}
 	}
 
-	public static IEnumerator SpawnBushWolf(EnemyType type)
+	/// <summary>
+	/// Kidnapper Fox. It lives in a patch of vain shrouds (the weeds) and deletes itself the moment it spawns on a
+	/// moon that has none. The old spawn didn't even spawn one: it grew a weed and deleted all weeds again. Now: if
+	/// there are no weeds, grow a patch (on the host) away from the ship, then spawn the fox, which walks to its den.
+	/// </summary>
+	public static void SpawnBushWolf(EnemyType type)
 	{
-		MoldSpreadManager moldSpreadManager = UnityEngine.Object.FindObjectOfType<MoldSpreadManager>();
-		if (!(moldSpreadManager == null))
+		if (!MakeFoxDen(out MoldSpreadManager mold))
 		{
-			moldSpreadManager.GenerateMold(RoundManager.Instance.outsideAINodes[UnityEngine.Random.Range(0, RoundManager.Instance.outsideAINodes.Length)].transform.position, 1);
-			yield return new WaitForSeconds(0.5f);
-			moldSpreadManager.RemoveAllMold();
+			return;
 		}
+		RoundManager.Instance.SpawnEnemyGameObject(mold.mostHiddenPosition, 0f, -1, type);
+	}
+
+	/// <summary>Makes sure the moon has vain shrouds for a Kidnapper Fox to live in. False (with a tip) if it can't.</summary>
+	public static bool MakeFoxDen(out MoldSpreadManager mold)
+	{
+		mold = UnityEngine.Object.FindObjectOfType<MoldSpreadManager>();
+		if (mold == null || mold.grassInstancer == null || RoundManager.Instance.outsideAINodes == null || RoundManager.Instance.outsideAINodes.Length == 0)
+		{
+			HUDManager.Instance?.DisplayTip("Lethal Menu", "A Kidnapper Fox needs vain shrouds, and this moon can't grow them");
+			return false;
+		}
+		if (mold.GetWeeds())
+		{
+			return true;
+		}
+		SelectableLevel level = StartOfRound.Instance.currentLevel;
+		int savedIterations = level.moldSpreadIterations;
+		int savedStart = level.moldStartPosition;
+		int savedAmount = mold.generatedAmountThisDay;
+		List<int> destroyed = mold.planetMoldStates[StartOfRound.Instance.currentLevelID].destroyedMold;
+		List<int> savedDestroyed = destroyed.ToList();
+		// Weeds players pulled up on this moon are remembered by number and never grow again; a new patch is
+		// numbered the same way, so set that list aside while growing it.
+		destroyed.Clear();
+		try
+		{
+			Vector3 ship = StartOfRound.Instance.shipLandingPosition.position;
+			List<Vector3> spots = RoundManager.Instance.outsideAINodes
+				.Where((GameObject n) => n != null && Vector3.Distance(n.transform.position, ship) > 40f)
+				.Select((GameObject n) => n.transform.position)
+				.OrderBy((Vector3 _) => UnityEngine.Random.value)
+				.Take(6)
+				.ToList();
+			foreach (Vector3 spot in spots)
+			{
+				mold.Reflect().SetValue("finishedGeneratingMold", false); // it only grows once per day
+				mold.GenerateMold(spot, 12);
+				if (mold.GetWeeds())
+				{
+					break;
+				}
+			}
+		}
+		catch (Exception ex)
+		{
+			Debug.LogWarning("[LethalMenu] Growing a fox den failed: " + ex.Message);
+		}
+		finally
+		{
+			// Leave the moon's own weed history alone: this patch is only for today, and the game spawns extra
+			// monsters on days with lots of weeds (generatedAmountThisDay).
+			destroyed.Clear();
+			destroyed.AddRange(savedDestroyed);
+			level.moldSpreadIterations = savedIterations;
+			level.moldStartPosition = savedStart;
+			mold.generatedAmountThisDay = savedAmount;
+		}
+		if (!mold.GetWeeds())
+		{
+			HUDManager.Instance?.DisplayTip("Lethal Menu", "Couldn't grow vain shrouds for a Kidnapper Fox here");
+			return false;
+		}
+		HUDManager.Instance?.DisplayTip("Lethal Menu", "Grew vain shrouds for the fox's den (only you see the weeds)");
+		return true;
+	}
+
+	/// <summary>
+	/// Cadaver Growths isn't a creature: it's the plant that grows through the building, room by room, and infects
+	/// players who walk in it (an infected player who dies bursts into a Cadaver Bloom). The game starts it in a
+	/// random room and grows it a few plants at a time, so spawning it looked like nothing happened. Only one can
+	/// exist. Spawning it (again) now also starts it growing in the room you're standing in, in a quick burst.
+	/// </summary>
+	private static void SpawnCadaverGrowth(EnemyType type)
+	{
+		CadaverGrowthAI growth = UnityEngine.Object.FindObjectOfType<CadaverGrowthAI>();
+		if (growth == null || growth.isEnemyDead)
+		{
+			GameObject[] nodes = RoundManager.Instance.insideAINodes;
+			if (nodes == null || nodes.Length == 0)
+			{
+				return;
+			}
+			NetworkObjectReference spawned = RoundManager.Instance.SpawnEnemyGameObject(nodes[UnityEngine.Random.Range(0, nodes.Length)].transform.position, 0f, -1, type);
+			if (!spawned.TryGet(out NetworkObject networkObject) || !networkObject.TryGetComponent(out growth))
+			{
+				return;
+			}
+		}
+		LethalMenu.Instance.StartCoroutine(GrowWhereYouAre(growth));
+	}
+
+	private static IEnumerator GrowWhereYouAre(CadaverGrowthAI growth)
+	{
+		// Wait for it to start up (it picks its first room then).
+		for (int i = 0; i < 20 && growth != null && growth.GrowthTiles.Count == 0; i++)
+		{
+			yield return null;
+		}
+		if (growth == null || growth.isEnemyDead)
+		{
+			yield break;
+		}
+		PlayerControllerB player = LethalMenu.localPlayer;
+		string where = "in a random room inside";
+		if (player != null && player.isInsideFactory && TryAddGrowthTile(growth, player.transform.position))
+		{
+			where = "in this room";
+		}
+		// A growth burst: a plant every 0.15 s for a few seconds instead of one every few seconds.
+		growth.Reflect().SetValue("growthBurstTimer", 0f);
+		growth.Reflect().SetValue("inGrowthBurst", true);
+		HUDManager.Instance?.DisplayTip("Lethal Menu", "Cadaver Growths is growing " + where + ". Walking in it infects players.");
+	}
+
+	private static bool TryAddGrowthTile(CadaverGrowthAI growth, Vector3 position)
+	{
+		DunGen.RuntimeDungeon dungeon = UnityEngine.Object.FindObjectOfType<DunGen.RuntimeDungeon>();
+		List<DunGen.Tile> tiles = dungeon?.Generator?.CurrentDungeon?.AllTiles?.ToList();
+		if (tiles == null)
+		{
+			return false;
+		}
+		int index = tiles.FindIndex((DunGen.Tile t) => t != null && t.Bounds.Contains(position));
+		if (index < 0)
+		{
+			return false;
+		}
+		if (growth.GrowthTiles.Any((TileWithGrowth g) => g.tile == tiles[index]))
+		{
+			return true; // already growing here
+		}
+		Vector3 start = RoundManager.Instance.GetNavMeshPosition(position, default, 5f);
+		// What the game does when the plants spread into a new room: add it here, then tell everyone else.
+		growth.GrowthTiles.Add(new TileWithGrowth(tiles[index], growth.TileCapacity, growth.CaveTileTag, growth.RoomTileTag, growth.TunnelTileTag, start));
+		growth.SyncAddGrowthTileRpc(index, start);
+		return true;
 	}
 
 	public static IEnumerator ToggleTerminalSound()

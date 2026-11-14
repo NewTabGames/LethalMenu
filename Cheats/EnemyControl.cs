@@ -642,7 +642,19 @@ internal class EnemyControl : Cheat
 			}
 			else if (enemy is ClaySurgeonAI barber)
 			{
-				if (barber.jumpSpeed > 0.5f) speeds = (barber.jumpSpeed, barber.jumpSpeed);
+				// It moves only during each hop (jumpTime), with its speed set to jumpSpeed. Its walker starts every
+				// hop from a standstill and speeds up at its acceleration, so it covers far less ground than jumpSpeed
+				// for the whole hop; moving at full jumpSpeed made a driven Barber much faster than a player.
+				float v = barber.jumpSpeed;
+				float hopTime = Mathf.Max(barber.jumpTime, 0.05f);
+				float accel = barber.agent != null ? barber.agent.acceleration : 0f;
+				if (v > 0.5f)
+				{
+					float distance = accel <= 0.01f ? v * hopTime : (accel * hopTime < v ? 0.5f * accel * hopTime * hopTime : v * hopTime - v * v / (2f * accel));
+					float hop = Mathf.Clamp(distance / hopTime, 1.5f, v);
+					speeds = (hop, hop);
+				}
+				Debug.Log($"[LethalMenu] Barber hop: jumpSpeed {v}, jumpTime {barber.jumpTime}, acceleration {accel}, beat every {barber.currentInterval}s -> {speeds.Walk:0.00} m/s while hopping");
 			}
 			else if (enemy is RadMechAI mech)
 			{
