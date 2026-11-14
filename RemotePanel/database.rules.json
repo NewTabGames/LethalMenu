@@ -1,0 +1,70 @@
+{
+  "rules": {
+    "usernames": {
+      "$name": {
+        ".read": "auth != null",
+        ".write": "auth != null && auth.provider !== 'anonymous' && ((!data.exists() && newData.val() === auth.uid) || (data.val() === auth.uid && !newData.exists() && newData.parent().parent().child('users/' + auth.uid + '/profile/username').val() !== $name))",
+        ".validate": "!newData.exists() || ($name.matches(/^[a-z0-9_]{3,20}$/) && newData.isString())"
+      }
+    },
+    "users": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid && auth.provider !== 'anonymous'",
+        "profile": {
+          ".validate": "newData.child('username').isString() && newData.child('username').val().matches(/^[a-z0-9_]{3,20}$/) && newData.parent().parent().parent().child('usernames/' + newData.child('username').val()).val() === $uid"
+        },
+        "devices": {
+          "$dev": {
+            ".validate": "!newData.exists() || (newData.child('name').isString() && newData.child('name').val().length <= 64)"
+          }
+        }
+      }
+    },
+    "pairCodes": {
+      "$code": {
+        ".read": "auth != null && auth.provider !== 'anonymous'",
+        ".write": "auth != null && ((!data.exists() && newData.child('device').val() === auth.uid) || (data.child('device').val() === auth.uid && !newData.exists()))",
+        ".validate": "!newData.exists() || ($code.matches(/^[A-Z0-9]{6,10}$/) && newData.child('device').isString() && newData.child('name').isString() && newData.child('name').val().length <= 64 && newData.child('at').val() === now)"
+      }
+    },
+    "devices": {
+      "$dev": {
+        ".read": "auth != null && data.child('owner/uid').val() === auth.uid",
+        ".write": "auth != null && data.child('owner/uid').val() === auth.uid && !newData.exists()",
+        "owner": {
+          ".read": "auth != null && auth.uid === $dev",
+          ".write": "auth != null && auth.provider !== 'anonymous' && ((!data.exists() && newData.child('uid').val() === auth.uid && root.child('pairCodes/' + newData.child('code').val() + '/device').val() === $dev && root.child('pairCodes/' + newData.child('code').val() + '/at').val() > now - 600000) || (data.child('uid').val() === auth.uid && !newData.exists()))",
+          ".validate": "!newData.exists() || (newData.child('username').isString() && newData.child('username').val().length <= 20)"
+        },
+        "info": {
+          ".write": "auth != null && auth.uid === $dev && root.child('devices/' + $dev + '/owner/uid').exists()",
+          ".validate": "newData.child('online').isBoolean() && newData.child('lastSeen').isNumber() && (!newData.child('name').exists() || (newData.child('name').isString() && newData.child('name').val().length <= 64)) && (!newData.child('version').exists() || (newData.child('version').isString() && newData.child('version').val().length <= 32))"
+        },
+        "catalog": {
+          ".write": "auth != null && auth.uid === $dev && root.child('devices/' + $dev + '/owner/uid').exists()",
+          ".validate": "newData.hasChildren(['hacks'])"
+        },
+        "state": {
+          ".write": "auth != null && auth.uid === $dev && root.child('devices/' + $dev + '/owner/uid').exists()",
+          ".validate": "newData.hasChildren(['toggles'])"
+        },
+        "map": {
+          ".write": "auth != null && auth.uid === $dev && root.child('devices/' + $dev + '/owner/uid').exists()",
+          ".validate": "!newData.exists() || (newData.child('seed').isNumber() && newData.child('moon').isString() && newData.child('moon').val().length <= 64)"
+        },
+        "lastResult": {
+          ".write": "auth != null && auth.uid === $dev && root.child('devices/' + $dev + '/owner/uid').exists()",
+          ".validate": "newData.child('ok').isBoolean() && newData.child('message').isString() && newData.child('message').val().length <= 2000"
+        },
+        "commands": {
+          ".read": "auth != null && auth.uid === $dev && root.child('devices/' + $dev + '/owner/uid').exists()",
+          "$cmd": {
+            ".write": "auth != null && ((!data.exists() && newData.exists() && auth.uid === root.child('devices/' + $dev + '/owner/uid').val()) || (auth.uid === $dev && !newData.exists()))",
+            ".validate": "newData.child('type').isString() && newData.child('type').val().matches(/^(toggle|run|setting|menu|controlTarget|controlAI|stopHunt|saveSettings|eject|ping)$/) && newData.child('at').val() === now && (!newData.child('hack').exists() || (newData.child('hack').isString() && newData.child('hack').val().length <= 64)) && (!newData.child('name').exists() || (newData.child('name').isString() && newData.child('name').val().length <= 64))"
+          }
+        }
+      }
+    }
+  }
+}

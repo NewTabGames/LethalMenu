@@ -1,0 +1,15 @@
+# Build output
+bin/
+obj/
+*.user
+.vs/
+
+# Local tools / Claude settings
+.claude/
+
+# The website has its own repo (NewTabGames/LM-Remote)
+RemotePanel/public/
+
+# Backups
+*.bak
+*.bak-*

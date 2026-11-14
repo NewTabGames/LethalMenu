@@ -1,0 +1,51 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <AssemblyName>LethalMenu</AssemblyName>
+    <RootNamespace>LethalMenu</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <Nullable>disable</Nullable>
+    <NoWarn>$(NoWarn);CS0436;CS8632</NoWarn>
+    <GameDir Condition="'$(GameDir)' == ''">C:\Program Files (x86)\Steam\steamapps\common\Lethal Company</GameDir>
+    <ManagedDir>$(GameDir)\Lethal Company_Data\Managed</ManagedDir>
+    <BepInExDir>$(GameDir)\BepInEx</BepInExDir>
+    <!-- Compile against the embedded Harmony (used when injected). Under BepInEx the already-loaded HarmonyX is used instead. -->
+    <HarmonyPath Condition="'$(HarmonyPath)' == ''">Resources\0Harmony.dll</HarmonyPath>
+    <!-- Where the game's own DLLs come from:
+         - the installed game (default on your PC), or
+         - NuGet packages when the game isn't installed (GitHub Actions), or when built with -p:UseGameLibsPackage=true.
+         The package is the community's stripped reference copy of the game's DLLs (no game code, names only). -->
+    <UseGameLibsPackage Condition="'$(UseGameLibsPackage)' == '' And !Exists('$(ManagedDir)\Assembly-CSharp.dll')">true</UseGameLibsPackage>
+    <GameLibsVersion Condition="'$(GameLibsVersion)' == ''">81.0.5-ngd.0</GameLibsVersion>
+    <RestoreAdditionalProjectSources Condition="'$(UseGameLibsPackage)' == 'true'">https://nuget.bepinex.dev/v3/index.json</RestoreAdditionalProjectSources>
+    <!-- Copy the built DLL into BepInEx\plugins\LethalMenu after every build (pass -p:DeployToBepInEx=false to skip). -->
+    <DeployToBepInEx Condition="'$(DeployToBepInEx)' == ''">true</DeployToBepInEx>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="0Harmony"><HintPath>$(HarmonyPath)</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+  <!-- The installed game -->
+  <ItemGroup Condition="'$(UseGameLibsPackage)' != 'true'">
+    <Reference Include="BepInEx"><HintPath>$(BepInExDir)\core\BepInEx.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Newtonsoft.Json"><HintPath>$(ManagedDir)\Newtonsoft.Json.dll</HintPath><Private>false</Private></Reference>
+    <GameRef Include="Assembly-CSharp;DissonanceVoip;Facepunch.Steamworks.Win64;Unity.InputSystem;Unity.Netcode.Runtime;Unity.RenderPipelines.Core.Runtime;Unity.RenderPipelines.HighDefinition.Runtime;Unity.TextMeshPro;UnityEngine;UnityEngine.AIModule;UnityEngine.AnimationModule;UnityEngine.AssetBundleModule;UnityEngine.AudioModule;UnityEngine.CoreModule;UnityEngine.IMGUIModule;UnityEngine.InputLegacyModule;UnityEngine.ParticleSystemModule;UnityEngine.PhysicsModule;UnityEngine.TextRenderingModule;UnityEngine.UI;UnityEngine.UIModule;UnityEngine.UnityWebRequestModule;UnityEngine.UnityWebRequestTextureModule" />
+    <Reference Include="@(GameRef)"><HintPath>$(ManagedDir)\%(Identity).dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+  <!-- No game installed: reference packages from NuGet (and BepInEx's own feed) -->
+  <ItemGroup Condition="'$(UseGameLibsPackage)' == 'true'">
+    <PackageReference Include="LethalCompany.GameLibs.Steam" Version="$(GameLibsVersion)" PrivateAssets="all" />
+    <PackageReference Include="BepInEx.Core" Version="5.4.21" PrivateAssets="all" />
+    <!-- BepInEx.Core brings its own Harmony; the project already compiles against Resources\0Harmony.dll. -->
+    <PackageReference Include="HarmonyX" Version="2.7.0" ExcludeAssets="all" PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\**\*" />
+  </ItemGroup>
+  <Target Name="DeployPlugin" AfterTargets="Build" Condition="'$(DeployToBepInEx)' == 'true' And Exists('$(BepInExDir)\plugins')">
+    <MakeDir Directories="$(BepInExDir)\plugins\LethalMenu" ContinueOnError="true" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(BepInExDir)\plugins\LethalMenu" ContinueOnError="true" />
+    <Message Importance="high" Text="Deployed LethalMenu.dll to $(BepInExDir)\plugins\LethalMenu" />
+  </Target>
+</Project>
