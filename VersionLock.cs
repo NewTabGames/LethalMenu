@@ -18,7 +18,11 @@ internal static class VersionLock
 {
 	internal const string RepoUrl = "https://github.com/NewTabGames/LethalMenu";
 
-	private const string RequiredUrl = "https://raw.githubusercontent.com/NewTabGames/LethalMenu/main/required-version.txt";
+	/// <summary>GitHub's API gives the file as it is right now (cached at most a minute). The raw file server caches
+	/// it for 5 minutes and more, so it's only the backup (e.g. when the API's hourly limit is used up).</summary>
+	private const string ApiUrl = "https://api.github.com/repos/NewTabGames/LethalMenu/contents/required-version.txt";
+
+	private const string RawUrl = "https://raw.githubusercontent.com/NewTabGames/LethalMenu/main/required-version.txt";
 
 	/// <summary>Checked once at launch, then every 5 minutes while the game is running.</summary>
 	private const float RecheckEvery = 300f;
@@ -66,9 +70,7 @@ internal static class VersionLock
 	{
 		try
 		{
-			// The query string gets around GitHub's few-minute cache when the file was just changed.
-			string text = await Http.GetStringAsync(RequiredUrl + "?t=" + DateTime.UtcNow.Ticks).ConfigureAwait(false);
-			string required = text.Trim();
+			string required = (await Fetch().ConfigureAwait(false)).Trim();
 			if (Version.TryParse(Clean(required), out Version need) && Version.TryParse(Clean(Settings.version), out Version have))
 			{
 				requiredVersion = have < need ? "v" + Clean(required) : null;
@@ -81,6 +83,24 @@ internal static class VersionLock
 		finally
 		{
 			checking = false;
+		}
+	}
+
+	private static async Task<string> Fetch()
+	{
+		try
+		{
+			using HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, ApiUrl);
+			request.Headers.TryAddWithoutValidation("Accept", "application/vnd.github.raw");
+			request.Headers.TryAddWithoutValidation("User-Agent", "LethalMenuReborn");
+			using HttpResponseMessage response = await Http.SendAsync(request).ConfigureAwait(false);
+			response.EnsureSuccessStatusCode();
+			return await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+		}
+		catch (Exception ex)
+		{
+			Debug.LogWarning("[LethalMenu] Update check via GitHub API failed (" + ex.Message + "); trying the raw file");
+			return await Http.GetStringAsync(RawUrl).ConfigureAwait(false);
 		}
 	}
 
