@@ -4,6 +4,19 @@ A menu mod for Lethal Company (BepInEx 5 plugin), with a website remote panel.
 
 All support to IcyRelic and Dustin, the creators of Lethal Menu. This is a fixed-up version by TyGamer4.
 
+## Requirements
+
+- **BepInEx 5** (Windows x64), **5.4.21 or newer**. Tested with **BepInEx 5.4.23.6**.
+  BepInEx 6 is not supported.
+- Lethal Company (Steam), the current version.
+
+## Install
+
+1. Install [BepInEx 5](https://github.com/BepInEx/BepInEx/releases) into the Lethal Company folder and run the
+   game once so it creates its folders.
+2. Put `LethalMenu.dll` in `BepInEx\plugins\LethalMenu\`.
+3. Start the game.
+
 ## Building
 
 - **On your PC:** `dotnet build -c Release`. It compiles against your installed game
