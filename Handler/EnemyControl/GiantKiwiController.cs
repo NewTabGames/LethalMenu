@@ -118,20 +118,6 @@ internal static class GiantKiwiAIPatches
 
 	private static readonly AccessTools.FieldRef<GiantKiwiAI, bool> Attacking = AccessTools.FieldRefAccess<GiantKiwiAI, bool>("attacking");
 
-	// Its AI step walks it around the nest, goes for eggs and picks its own fights; none of that while you drive it.
-	[HarmonyPrefix]
-	[HarmonyPatch(typeof(GiantKiwiAI), nameof(GiantKiwiAI.DoAIInterval))]
-	public static bool DoAIInterval(GiantKiwiAI __instance)
-	{
-		if (!Control.IsDrivenByYou(__instance))
-		{
-			return true;
-		}
-		// Skipping its AI also skips the game's "send my position to the other players" step, so do that part.
-		__instance.SyncPositionToClients();
-		return false;
-	}
-
 	[HarmonyPostfix]
 	[HarmonyPatch(typeof(GiantKiwiAI), nameof(GiantKiwiAI.Update))]
 	public static void Update(GiantKiwiAI __instance)

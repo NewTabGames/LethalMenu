@@ -8,20 +8,6 @@ namespace LethalMenu.Handler.EnemyControl;
 [HarmonyPatch]
 internal static class DoublewingAIPatches
 {
-	// Its AI would take off by itself whenever it sees or hears a player, then try to land somewhere else.
-	[HarmonyPrefix]
-	[HarmonyPatch(typeof(DoublewingAI), nameof(DoublewingAI.DoAIInterval))]
-	public static bool DoAIInterval(DoublewingAI __instance)
-	{
-		if (!Control.IsDrivenByYou(__instance))
-		{
-			return true;
-		}
-		// Skipping its AI also skips the game's "send my position to the other players" step, so do that part.
-		__instance.SyncPositionToClients();
-		return false;
-	}
-
 	[HarmonyPrefix]
 	[HarmonyPatch(typeof(DoublewingAI), nameof(DoublewingAI.AlertBird))]
 	public static bool AlertBird(DoublewingAI __instance)

@@ -28,20 +28,6 @@ internal static class SandSpiderAIPatches
 	/// <summary>Farther than this from where you are and the body jumps straight there (teleports, entrances).</summary>
 	private const float SnapDistance = 4f;
 
-	// Its AI step looks for walls to climb and plans the body's route; none of that while you drive it.
-	[HarmonyPrefix]
-	[HarmonyPatch(typeof(SandSpiderAI), nameof(SandSpiderAI.DoAIInterval))]
-	public static bool DoAIInterval(SandSpiderAI __instance)
-	{
-		if (!Control.IsDrivenByYou(__instance))
-		{
-			return true;
-		}
-		// Skipping its AI also skips the game's "send my position to the other players" step, so do that part.
-		__instance.SyncPositionToClients();
-		return false;
-	}
-
 	// Runs right before the game moves the body each frame: aim it at where you are, facing where you face.
 	[HarmonyPrefix]
 	[HarmonyPatch(typeof(SandSpiderAI), nameof(SandSpiderAI.LateUpdate))]

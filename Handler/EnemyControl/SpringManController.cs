@@ -91,19 +91,6 @@ internal static class SpringManAIPatches
 
 	private static readonly AccessTools.FieldRef<SpringManAI, float> CurrentAnimSpeed = AccessTools.FieldRefAccess<SpringManAI, float>("currentAnimSpeed");
 
-	// Its AI step picks targets and switches between roaming and chasing; not while you drive it.
-	[HarmonyPrefix]
-	[HarmonyPatch(typeof(SpringManAI), nameof(SpringManAI.DoAIInterval))]
-	public static bool DoAIInterval(SpringManAI __instance)
-	{
-		if (!Control.IsDrivenByYou(__instance))
-		{
-			return true;
-		}
-		__instance.SyncPositionToClients();
-		return false;
-	}
-
 	[HarmonyPrefix]
 	[HarmonyPatch(typeof(SpringManAI), nameof(SpringManAI.Update))]
 	public static void UpdatePrefix(SpringManAI __instance)

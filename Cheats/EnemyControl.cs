@@ -75,6 +75,30 @@ internal class EnemyControl : Cheat
 
 	internal static bool YouAreSprinting => YouAreMoving && movement.IsSprinting;
 
+	/// <summary>
+	/// What the camera is pointed at (the first thing hit that isn't the controlled monster itself), or a point
+	/// <paramref name="range"/> metres ahead when nothing is hit. For monsters that shoot where you aim.
+	/// </summary>
+	internal static Vector3 AimPoint(float range)
+	{
+		Camera cam = Freecam.camera;
+		if (cam == null)
+		{
+			return enemy != null ? enemy.transform.position + enemy.transform.forward * range : Vector3.zero;
+		}
+		Ray ray = new Ray(cam.transform.position, cam.transform.forward);
+		RaycastHit[] hits = Physics.RaycastAll(ray, range, StartOfRound.Instance.collidersAndRoomMaskAndDefault | (1 << 3) | (1 << 19), QueryTriggerInteraction.Ignore);
+		float best = range;
+		foreach (RaycastHit hit in hits)
+		{
+			if (hit.distance < best && (enemy == null || hit.collider.GetComponentInParent<EnemyAI>() != enemy))
+			{
+				best = hit.distance;
+			}
+		}
+		return ray.GetPoint(best);
+	}
+
 	internal static bool IsOnGround => movement == null || movement.IsGrounded;
 
 	internal static float VerticalSpeed => movement != null ? movement.VerticalVelocity : 0f;
@@ -609,6 +633,15 @@ internal class EnemyControl : Cheat
 			{
 				float m = t.Field("speedMultiplier").GetValue<float>();
 				if (m > 0.05f) speeds = (5f * m, 10f * m);
+			}
+			else if (enemy is ClaySurgeonAI barber)
+			{
+				if (barber.jumpSpeed > 0.5f) speeds = (barber.jumpSpeed, barber.jumpSpeed);
+			}
+			else if (enemy is RadMechAI mech)
+			{
+				// It moves only while taking a step, at stepMovementSpeed; driven, it steps without pausing.
+				if (mech.stepMovementSpeed > 0.5f) speeds = (mech.stepMovementSpeed, mech.stepMovementSpeed * 1.6f);
 			}
 			else if (enemy is CaveDwellerAI)
 			{

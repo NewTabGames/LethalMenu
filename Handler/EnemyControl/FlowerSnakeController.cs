@@ -120,20 +120,3 @@ internal class FlowerSnakeController : IEnemyController<FlowerSnakeEnemy>, ICont
 	}
 }
 
-/// <summary>While you drive a tulip snake, its own AI doesn't wander off or leap at players by itself.</summary>
-[HarmonyPatch]
-internal static class FlowerSnakeEnemyPatches
-{
-	[HarmonyPrefix]
-	[HarmonyPatch(typeof(FlowerSnakeEnemy), nameof(FlowerSnakeEnemy.DoAIInterval))]
-	public static bool DoAIInterval(FlowerSnakeEnemy __instance)
-	{
-		if (!Control.IsDrivenByYou(__instance))
-		{
-			return true;
-		}
-		// Skipping its AI also skips the game's "send my position to the other players" step, so do that part.
-		__instance.SyncPositionToClients();
-		return false;
-	}
-}

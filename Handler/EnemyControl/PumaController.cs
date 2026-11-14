@@ -95,19 +95,6 @@ internal static class PumaAIPatches
 
 	private static readonly AccessTools.FieldRef<PumaAI, bool> StalkingFrozenAnim = AccessTools.FieldRefAccess<PumaAI, bool>("stalkingFrozenAnim");
 
-	// Its AI step hunts for trees, stalks and decides when to give up; none of that while you drive it.
-	[HarmonyPrefix]
-	[HarmonyPatch(typeof(PumaAI), nameof(PumaAI.DoAIInterval))]
-	public static bool DoAIInterval(PumaAI __instance)
-	{
-		if (!Control.IsDrivenByYou(__instance))
-		{
-			return true;
-		}
-		__instance.SyncPositionToClients();
-		return false;
-	}
-
 	[HarmonyPrefix]
 	[HarmonyPatch(typeof(PumaAI), nameof(PumaAI.Update))]
 	public static void UpdatePrefix(PumaAI __instance)
