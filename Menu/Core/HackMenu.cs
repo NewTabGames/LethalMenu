@@ -125,7 +125,7 @@ internal class HackMenu : MenuFragment
 				return;
 			}
 			GUI.color = new Color(1f, 1f, 1f, Settings.f_menuAlpha);
-			windowRect = GUILayout.Window(0, windowRect, DrawContent, "Lethal Menu");
+			windowRect = GUILayout.Window(0, windowRect, DrawContent, "Lethal Menu Reborn " + Settings.version);
 			UnlockableManagerWindow.Draw();
 			ItemManagerWindow.Draw();
 			MoonManagerWindow.Draw();

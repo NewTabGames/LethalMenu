@@ -276,7 +276,7 @@ internal static class RemoteControl
 				firebase.Put(device + "/info", new Dictionary<string, object>
 				{
 					{ "name", config.DeviceName },
-					{ "version", Settings.version },
+					{ "version", "Reborn " + Settings.version },
 					{ "online", true },
 					{ "lastSeen", ServerTimestamp }
 				});

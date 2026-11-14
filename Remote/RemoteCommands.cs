@@ -14,6 +14,10 @@ internal static class RemoteCommands
 	public static string Execute(JObject command)
 	{
 		string type = (string)command["type"];
+		if (VersionLock.Locked && type != "ping")
+		{
+			throw new InvalidOperationException(VersionLock.Message + " " + VersionLock.RepoUrl);
+		}
 		switch (type)
 		{
 		case "toggle":

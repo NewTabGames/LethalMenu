@@ -199,6 +199,7 @@ public class LethalMenu : MonoBehaviour
 		}
 		if (!Ejector.Ejecting)
 		{
+			VersionLock.Tick();
 			Remote.RemoteControl.Tick();
 			try
 			{
@@ -213,7 +214,7 @@ public class LethalMenu : MonoBehaviour
 		{
 			// No keybinds while ejecting; the cheats still update so they can restore the game's values.
 			// None in Stealth Mode either: only the website drives the menu then.
-			if (!Ejector.Ejecting && !Settings.b_StealthMode)
+			if (!Ejector.Ejecting && !Settings.b_StealthMode && !VersionLock.Locked)
 			{
 				foreach (Hack value in Enum.GetValues(typeof(Hack)))
 				{
@@ -307,7 +308,11 @@ public class LethalMenu : MonoBehaviour
 					}
 				}
 			}
-			if (!Settings.b_StealthMode)
+			if (VersionLock.Locked)
+			{
+				VersionLock.DrawLockScreen(); // outdated: black screen with the update link, and no menu
+			}
+			else if (!Settings.b_StealthMode)
 			{
 				menu.Draw(); // the menu window, its pop-ups and the first-launch window
 			}
