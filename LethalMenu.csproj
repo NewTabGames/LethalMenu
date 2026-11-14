@@ -42,6 +42,9 @@
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Resources\**\*" />
+    <!-- _reference holds the original Lethal Menu source for comparing; it is never compiled -->
+    <Compile Remove="_reference\**" />
+    <None Remove="_reference\**" />
   </ItemGroup>
   <Target Name="DeployPlugin" AfterTargets="Build" Condition="'$(DeployToBepInEx)' == 'true' And Exists('$(BepInExDir)\plugins')">
     <MakeDir Directories="$(BepInExDir)\plugins\LethalMenu" ContinueOnError="true" />

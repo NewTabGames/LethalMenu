@@ -13,3 +13,6 @@ RemotePanel/public/
 # Backups
 *.bak
 *.bak-*
+
+# Untouched copy of the original Lethal Menu source, for reference only (not built, not in git)
+_reference/
