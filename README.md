@@ -30,7 +30,7 @@ All support to IcyRelic and Dustin, the creators of Lethal Menu. This is a fixed
 
 ### Added
 - **[Website remote](https://github.com/NewTabGames/LM-Remote):** control the menu from your browser, with accounts and a live map.
-- **Monster control:** works on the new monsters, with better controls; Manticoils can fly.
+- **Monster control:** works on the new monsters, with better controls.
 - **Hunts:** send monsters after a player (Hunt, Persistent, Aggro for Eyeless Dogs, Hunt With All).
 - **Stealth Mode:** hides the menu and notifications; use the website only.
 - **Debug tab**, **Eject** and **BepInEx** support.
