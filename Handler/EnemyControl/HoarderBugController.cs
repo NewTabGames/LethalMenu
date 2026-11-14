@@ -56,6 +56,14 @@ internal class HoarderBugController : IEnemyController<HoarderBugAI>, IControlle
 			{
 				enemy.angryTimer = 5f;
 			}
+			// The game drops the bug out of its chase after 15s without seeing a player. We'd put it straight
+			// back, and every time it re-enters the chase it screams again, so that turned into a scream spam.
+			// Keep it "seeing" someone while attacking so the chase never ends.
+			if (enemy.IsOwner)
+			{
+				enemy.Reflect().SetValue("timeSinceSeeingAPlayer", 0f);
+				enemy.Reflect().SetValue("lostPlayerInChase", false);
+			}
 			if (!enemy.IsBehaviourState(BugState.CHASING_PLAYER))
 			{
 				enemy.SetBehaviourState(BugState.CHASING_PLAYER);

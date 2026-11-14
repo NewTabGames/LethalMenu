@@ -87,11 +87,23 @@ internal static class RemoteMap
 		bool splitByHeight = inside.Length > 0 && outside.Length > 0 && outsideBottom - insideTop > 30f;
 		float splitY = (insideTop + outsideBottom) / 2f;
 
+		// Where the map can be: around the AI nodes (and the ship, outside). Floor pieces far away from all of
+		// them (scenery, bits under the sea) would otherwise stretch the map until the real part is a tiny dot.
+		Vector3? shipPos = round.elevatorTransform != null ? round.elevatorTransform.position : (Vector3?)null;
+		Bounds? outArea = Area(outside, shipPos, 80f);
+		Bounds? inArea = Area(inside, null, 30f);
+
 		List<int> inTris = new List<int>();
 		List<int> outTris = new List<int>();
 		for (int t = 0; t + 2 < idx.Length; t += 3)
 		{
 			Vector3 c = (v[idx[t]] + v[idx[t + 1]] + v[idx[t + 2]]) / 3f;
+			bool nearOut = !outArea.HasValue || InXZ(outArea.Value, c);
+			bool nearIn = !inArea.HasValue || InXZ(inArea.Value, c);
+			if (!nearOut && !nearIn)
+			{
+				continue;
+			}
 			bool isInside;
 			if (inside.Length == 0)
 			{
@@ -109,16 +121,35 @@ internal static class RemoteMap
 			{
 				isInside = NearestSq(inside, c) < NearestSq(outside, c);
 			}
+			if (isInside ? !nearIn : !nearOut)
+			{
+				continue;
+			}
 			(isInside ? inTris : outTris).Add(t);
 		}
 
+		JObject outsideGrid = Rasterize(v, idx, outTris);
+		string how = "walk floor";
+		if (outTris.Count < 20 && outArea.HasValue)
+		{
+			// Hardly any walk floor outside (the Company has almost none): scan the ground from above instead.
+			JObject scanned = ScanGround(outArea.Value);
+			if (scanned != null)
+			{
+				outsideGrid = scanned;
+				how = "ground scan";
+			}
+		}
 		JObject map = new JObject
 		{
 			["moon"] = round.currentLevel.PlanetName,
 			["seed"] = round.randomMapSeed,
-			["outside"] = Rasterize(v, idx, outTris),
+			["outside"] = outsideGrid,
 			["inside"] = Rasterize(v, idx, inTris)
 		};
+		Debug.Log("[LethalMenu] Website map for " + round.currentLevel.PlanetName + ": outside " + (outsideGrid == null ? "none" : outsideGrid["w"] + "x" + outsideGrid["h"] + " (" + how + ")")
+			+ ", inside " + (map["inside"].Type == JTokenType.Null ? "none" : map["inside"]["w"] + "x" + map["inside"]["h"])
+			+ "; " + outTris.Count + "/" + inTris.Count + " floor pieces, " + outside.Length + "/" + inside.Length + " AI nodes");
 		JArray doors = new JArray();
 		foreach (EntranceTeleport door in UnityEngine.Object.FindObjectsOfType<EntranceTeleport>())
 		{
@@ -137,6 +168,63 @@ internal static class RemoteMap
 		}
 		map["doors"] = doors;
 		return map;
+	}
+
+	/// <summary>The box around these points (and the extra one), grown by margin metres. Null with no points.</summary>
+	private static Bounds? Area(Vector3[] points, Vector3? extra, float margin)
+	{
+		if (points.Length == 0 && !extra.HasValue)
+		{
+			return null;
+		}
+		Bounds b = new Bounds(points.Length > 0 ? points[0] : extra.Value, Vector3.zero);
+		foreach (Vector3 p in points)
+		{
+			b.Encapsulate(p);
+		}
+		if (extra.HasValue)
+		{
+			b.Encapsulate(extra.Value);
+		}
+		b.Expand(new Vector3(margin * 2f, margin * 2f, margin * 2f));
+		return b;
+	}
+
+	private static bool InXZ(Bounds b, Vector3 p)
+	{
+		return p.x >= b.min.x && p.x <= b.max.x && p.z >= b.min.z && p.z <= b.max.z;
+	}
+
+	/// <summary>
+	/// Map without walk floor: a ray straight down in every cell. Rays start just above the highest AI node / the
+	/// ship, under most roofs, so the floor inside buildings shows too. Only fairly flat ground counts as floor.
+	/// </summary>
+	private static JObject ScanGround(Bounds area)
+	{
+		float cell = Mathf.Max(MinCellSize, Mathf.Max(area.size.x, area.size.z) / MaxCells);
+		int w = Mathf.CeilToInt(area.size.x / cell) + 1;
+		int h = Mathf.CeilToInt(area.size.z / cell) + 1;
+		int mask = StartOfRound.Instance != null ? StartOfRound.Instance.collidersAndRoomMaskAndDefault : Physics.DefaultRaycastLayers;
+		// area was grown by the margin on y too: its top is about margin metres above the highest point.
+		float top = area.max.y - 80f + 4f;
+		float depth = 60f;
+		float[] height = new float[w * h];
+		int found = 0;
+		for (int cz = 0; cz < h; cz++)
+		{
+			for (int cx = 0; cx < w; cx++)
+			{
+				int i = cz * w + cx;
+				height[i] = float.NaN;
+				Vector3 from = new Vector3(area.min.x + (cx + 0.5f) * cell, top, area.min.z + (cz + 0.5f) * cell);
+				if (Physics.Raycast(from, Vector3.down, out RaycastHit hit, depth, mask, QueryTriggerInteraction.Ignore) && hit.normal.y > 0.6f)
+				{
+					height[i] = hit.point.y;
+					found++;
+				}
+			}
+		}
+		return found < 20 ? null : Encode(height, w, h, area.min.x, area.min.z, cell);
 	}
 
 	private static Vector3[] Nodes(GameObject[] nodes)
@@ -169,7 +257,7 @@ internal static class RemoteMap
 		{
 			return null;
 		}
-		float minX = float.MaxValue, maxX = float.MinValue, minZ = float.MaxValue, maxZ = float.MinValue, minY = float.MaxValue, maxY = float.MinValue;
+		float minX = float.MaxValue, maxX = float.MinValue, minZ = float.MaxValue, maxZ = float.MinValue;
 		foreach (int t in tris)
 		{
 			for (int k = 0; k < 3; k++)
@@ -177,7 +265,6 @@ internal static class RemoteMap
 				Vector3 p = v[idx[t + k]];
 				minX = Mathf.Min(minX, p.x); maxX = Mathf.Max(maxX, p.x);
 				minZ = Mathf.Min(minZ, p.z); maxZ = Mathf.Max(maxZ, p.z);
-				minY = Mathf.Min(minY, p.y); maxY = Mathf.Max(maxY, p.y);
 			}
 		}
 		minX -= 2f; minZ -= 2f; maxX += 2f; maxZ += 2f;
@@ -234,6 +321,21 @@ internal static class RemoteMap
 			MarkLine(a, b, cell, Mark);
 			MarkLine(b, c, cell, Mark);
 			MarkLine(c, a, cell, Mark);
+		}
+		return Encode(height, w, h, minX, minZ, cell);
+	}
+
+	/// <summary>Floor heights (NaN = no floor) to {x0, z0, cell, w, h, data}.</summary>
+	private static JObject Encode(float[] height, int w, int h, float minX, float minZ, float cell)
+	{
+		float minY = float.MaxValue, maxY = float.MinValue;
+		foreach (float y in height)
+		{
+			if (!float.IsNaN(y))
+			{
+				minY = Mathf.Min(minY, y);
+				maxY = Mathf.Max(maxY, y);
+			}
 		}
 		float span = Mathf.Max(1f, maxY - minY);
 		StringBuilder data = new StringBuilder();

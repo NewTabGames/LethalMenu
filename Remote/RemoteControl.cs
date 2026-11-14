@@ -182,6 +182,11 @@ internal static class RemoteControl
 	/// <summary>Main thread, every frame: runs queued commands and snapshots the state for upload.</summary>
 	private static float nextCatalogAt;
 
+	/// <summary>Until when the website's Map tab counts as open (see the "ping" command).</summary>
+	internal static float MapWatchedUntil;
+
+	internal static bool MapWatched => Time.unscaledTime < MapWatchedUntil;
+
 	private static volatile string latestCatalog;
 
 	/// <summary>The database refuses result messages over 2000 characters.</summary>
@@ -204,6 +209,10 @@ internal static class RemoteControl
 			{
 				result["ok"] = true;
 				result["message"] = Clip(RemoteCommands.Execute(item.Value));
+				if ((string)item.Value["type"] == "ping")
+				{
+					result["quiet"] = true; // the website doesn't pop up a message for these
+				}
 			}
 			catch (Exception ex)
 			{

@@ -100,6 +100,24 @@ internal static class EnemyHuntPatches
 			SteerAggroDog(dog, hunt, agent);
 			return;
 		}
+		if (hunt.Kill && EnemyHunt.SameArea(__instance, hunt.Target))
+		{
+			// Kill hunt: once close, make it angry at the player (the same as "Anger at player") so its own AI
+			// attacks with its normal damage. Repeated every few seconds in case it calms down or switches target.
+			bool onTarget = EnemyHunt.IsChasing(__instance) && (__instance.targetPlayer == null || __instance.targetPlayer == hunt.Target);
+			if (!onTarget && Time.time >= hunt.NextEnrage && Vector3.Distance(__instance.transform.position, hunt.Target.transform.position) <= EnemyHunt.KillAngerRange)
+			{
+				hunt.NextEnrage = Time.time + 3f;
+				try
+				{
+					Handler.EnemyAIExtensions.Handle(__instance).TargetPlayer(hunt.Target);
+				}
+				catch (System.Exception ex)
+				{
+					Debug.LogWarning("[LethalMenu] Kill hunt anger: " + ex.Message);
+				}
+			}
+		}
 		if (hunt.Persistent)
 		{
 			// Keeps going at them for as long as the hunt is on. It waits while they are in the other area

@@ -252,11 +252,13 @@ internal class EnemyTab : MenuTab
 			string reason = Cheats.EnemyHunt.WhyNot(enemy, selectedPlayer, persistent: true);
 			HUDManager.Instance?.DisplayTip("Lethal Menu", reason ?? Cheats.EnemyHunt.Begin(enemy, selectedPlayer, persistent: true));
 		});
-		if (enemy.Handle().HasInstaKill())
+		if (System.Array.IndexOf(Cheats.EnemyHunt.Harmless, enemy.GetType().Name) < 0)
 		{
+			// Hunts the player down and attacks with its normal damage until they're dead (no instant kill).
 			UI.Button("EnemyTab.KillSelectedPlayer", () =>
 			{
-				enemy.Handle().KillPlayer(selectedPlayer);
+				string reason = Cheats.EnemyHunt.WhyNot(enemy, selectedPlayer, kill: true);
+				HUDManager.Instance?.DisplayTip("Lethal Menu", reason ?? Cheats.EnemyHunt.Begin(enemy, selectedPlayer, kill: true));
 			});
 		}
 		UI.Hack(Hack.TeleportEnemy, "EnemyTab.TeleportSelectedPlayer", selectedPlayer, enemy);

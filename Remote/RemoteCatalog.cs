@@ -286,6 +286,9 @@ internal static class RemoteCatalog
 		};
 		StartOfRound round = StartOfRound.Instance;
 		PlayerControllerB local = GameNetworkManager.Instance?.localPlayerController;
+		// Positions only matter to the map; they change all the time, so they're only sent while it's open.
+		bool map = RemoteControl.MapWatched;
+		JArray items = new JArray();
 		if (round != null)
 		{
 			game["inRound"] = true;
@@ -294,7 +297,7 @@ internal static class RemoteCatalog
 			game["moon"] = round.currentLevel?.PlanetName ?? "";
 			game["isHost"] = local != null && local.IsHost;
 			game["credits"] = LethalMenu.terminal != null ? LethalMenu.terminal.groupCredits : 0;
-			if (round.elevatorTransform != null)
+			if (map && round.elevatorTransform != null)
 			{
 				game["ship"] = MapPos(round.elevatorTransform.position);
 			}
@@ -330,7 +333,7 @@ internal static class RemoteCatalog
 						["local"] = player == local,
 						["inside"] = player.isInsideFactory,
 						["item"] = player.currentlyHeldObjectServer != null && player.currentlyHeldObjectServer.itemProperties != null ? player.currentlyHeldObjectServer.itemProperties.itemName : null,
-						["pos"] = MapPos(player.isPlayerDead && player.deadBody != null ? player.deadBody.transform.position : player.transform.position)
+						["pos"] = map ? MapPos(player.isPlayerDead && player.deadBody != null ? player.deadBody.transform.position : player.transform.position) : null
 					});
 				}
 			}
@@ -346,7 +349,25 @@ internal static class RemoteCatalog
 						["dead"] = enemy.isEnemyDead,
 						["inside"] = !enemy.isOutside,
 						["distance"] = local != null ? Math.Round(Vector3.Distance(local.transform.position, enemy.transform.position)) : 0.0,
-						["pos"] = MapPos(enemy.transform.position)
+						["pos"] = map ? MapPos(enemy.transform.position) : null
+					});
+				}
+			}
+			if (map)
+			{
+				// Items lying around (not held, not in the ship), for the map's "Items" layer.
+				foreach (GrabbableObject item in LethalMenu.items)
+				{
+					if (item == null || item.isHeld || item.isHeldByEnemy || item.isInShipRoom || item.itemProperties == null || items.Count >= 300)
+					{
+						continue;
+					}
+					items.Add(new JObject
+					{
+						["n"] = item.itemProperties.itemName,
+						["v"] = item.scrapValue,
+						["i"] = item.isInFactory,
+						["p"] = MapPos(item.transform.position)
 					});
 				}
 			}
@@ -358,6 +379,7 @@ internal static class RemoteCatalog
 			["game"] = game,
 			["players"] = players,
 			["enemies"] = enemies,
+			["items"] = items,
 			// Who Spectate / Mini Cam / Demi God currently point at (player clientIds), so the website can offer "Stop".
 			["targets"] = new JObject
 			{

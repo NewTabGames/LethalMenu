@@ -10,7 +10,10 @@ public static class EnemyAIExtensions
 	/// <summary>The game's internal monster names that differ from what players call them.</summary>
 	private static readonly System.Collections.Generic.Dictionary<string, string> ShownNames = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
 	{
-		{ "Crawler", "Thumper" }
+		{ "Crawler", "Thumper" },
+		{ "Centipede", "Snare Flea" },
+		{ "Flowerman", "Bracken" },
+		{ "Flower Man", "Bracken" }
 	};
 
 	/// <summary>The name to show for an internal monster name (anything not listed is shown as-is).</summary>

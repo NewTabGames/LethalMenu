@@ -33,7 +33,17 @@ internal class EnemyHunt : Cheat
 		public bool Aggro;
 
 		public float NextEnrage;
+
+		/// <summary>Kill hunt: a persistent hunt that, once close, makes the monster angry at the player so it
+		/// attacks with its normal damage. Ends only when the player is dead (or it is stopped).</summary>
+		public bool Kill;
 	}
+
+	/// <summary>How close a kill hunt gets before the monster is made angry at the player.</summary>
+	internal const float KillAngerRange = 15f;
+
+	/// <summary>Monsters that can't hurt anyone, so "Kill player" isn't offered for them.</summary>
+	internal static readonly string[] Harmless = new string[] { "DocileLocustBeesAI", "DoublewingAI", "FlowerSnakeEnemy", "DressGirlAI" };
 
 	/// <summary>How close an aggro-hunting dog walks before it is enraged and sprints.</summary>
 	internal const float AggroRange = 12f;
@@ -188,8 +198,12 @@ internal class EnemyHunt : Cheat
 	}
 
 	/// <summary>Why this hunt can't start, or null if it can.</summary>
-	internal static string WhyNot(EnemyAI enemy, PlayerControllerB player, bool persistent = false, bool aggro = false)
+	internal static string WhyNot(EnemyAI enemy, PlayerControllerB player, bool persistent = false, bool aggro = false, bool kill = false)
 	{
+		if (kill && enemy != null && Array.IndexOf(Harmless, enemy.GetType().Name) >= 0)
+		{
+			return EnemyName(enemy) + " can't hurt anyone";
+		}
 		if (aggro && enemy != null && !(enemy is MouthDogAI))
 		{
 			return "Aggro Hunt only works on Eyeless Dogs";
@@ -206,7 +220,7 @@ internal class EnemyHunt : Cheat
 		{
 			return EnemyName(enemy) + " can't walk anywhere";
 		}
-		if (persistent || aggro)
+		if (persistent || aggro || kill)
 		{
 			return null; // it waits if they are in the other area, and takes over an existing chase
 		}
@@ -222,9 +236,9 @@ internal class EnemyHunt : Cheat
 	}
 
 	/// <summary>Starts (or retargets) a hunt. Returns a message for the player; throws if it can't start.</summary>
-	internal static string Begin(EnemyAI enemy, PlayerControllerB player, bool persistent = false, bool aggro = false)
+	internal static string Begin(EnemyAI enemy, PlayerControllerB player, bool persistent = false, bool aggro = false, bool kill = false)
 	{
-		string problem = WhyNot(enemy, player, persistent, aggro);
+		string problem = WhyNot(enemy, player, persistent, aggro, kill);
 		if (problem != null)
 		{
 			throw new InvalidOperationException(problem);
@@ -236,11 +250,16 @@ internal class EnemyHunt : Cheat
 			Hunts.Add(hunt);
 		}
 		hunt.Target = player;
-		hunt.Persistent = persistent || aggro;
+		hunt.Persistent = persistent || aggro || kill;
 		hunt.Aggro = aggro;
+		hunt.Kill = kill;
 		hunt.NextEnrage = 0f;
 		hunt.StartTime = Time.time;
 		hunt.NextOwnerRequest = 0f;
+		if (kill)
+		{
+			return EnemyName(enemy) + " is going after " + player.playerUsername + " and won't stop until they're dead";
+		}
 		if (aggro)
 		{
 			return EnemyName(enemy) + " is stalking " + player.playerUsername + " and will charge when close";
@@ -353,6 +372,10 @@ internal class EnemyHunt : Cheat
 		}
 		if (target.isPlayerDead)
 		{
+			if (hunt.Kill)
+			{
+				return target.playerUsername + " is dead; " + name + " stopped hunting";
+			}
 			return hunt.Persistent ? name + "'s hunt is over: " + target.playerUsername + " is dead" : "";
 		}
 		if (hunt.Persistent)

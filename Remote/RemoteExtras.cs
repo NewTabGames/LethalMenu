@@ -36,6 +36,9 @@ internal static class RemoteExtras
 		/// <summary>Only offer this on cards of this monster type, e.g. "SandSpiderAI" for web spawning.</summary>
 		public string Only;
 
+		/// <summary>Never offer this on cards of these monster types.</summary>
+		public string[] Not;
+
 		public Func<JArray> Args = () => new JArray();
 
 		public Func<JArray, string> Run;
@@ -206,18 +209,10 @@ internal static class RemoteExtras
 		},
 		new Extra
 		{
-			Key = "KillPlayerWithEnemy", Name = "Kill Player With Enemy", Tab = "Enemies", Group = "Enemies", Args = () => new JArray(Of("Enemy", "enemy"), Of("Player", "player")),
-			Run = (JArray a) =>
-			{
-				EnemyAI e = EnemyArg(a[0]);
-				PlayerControllerB p = PlayerArg(a[1]);
-				if (!e.Handle().HasInstaKill())
-				{
-					throw new InvalidOperationException(e.ShownName() + " has no instant kill");
-				}
-				e.Handle().KillPlayer(p);
-				return e.ShownName() + " killed " + p.playerUsername;
-			}
+			Key = "KillPlayerWithEnemy", Name = "Kill Player With Enemy", Tab = "Enemies", Group = "Enemies", Not = Cheats.EnemyHunt.Harmless, Args = () => new JArray(Of("Enemy", "enemy"), Of("Player", "player")),
+			// Not an instant kill: the monster hunts the player down and attacks with its own normal damage,
+			// and keeps at it until they are dead (or Stop is pressed).
+			Run = (JArray a) => Cheats.EnemyHunt.Begin(EnemyArg(a[0]), PlayerArg(a[1]), kill: true)
 		},
 		new Extra
 		{
@@ -353,6 +348,10 @@ internal static class RemoteExtras
 			if (extra.Only != null)
 			{
 				entry["only"] = extra.Only;
+			}
+			if (extra.Not != null)
+			{
+				entry["not"] = new JArray(extra.Not);
 			}
 			hacks[Prefix + extra.Key] = entry;
 		}

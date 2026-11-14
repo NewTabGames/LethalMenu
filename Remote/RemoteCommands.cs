@@ -71,6 +71,12 @@ internal static class RemoteCommands
 			Ejector.Eject();
 			return "Ejecting";
 		case "ping":
+			// The website pings with map = true every so often while its Map tab is open, and map = false when
+			// it leaves. Map dots (positions, items) are only sent while someone is looking at the map.
+			if (command["map"] != null && command["map"].Type == JTokenType.Boolean)
+			{
+				RemoteControl.MapWatchedUntil = (bool)command["map"] ? Time.unscaledTime + 45f : 0f;
+			}
 			return "pong";
 		default:
 			throw new InvalidOperationException("Unknown command '" + type + "'");
