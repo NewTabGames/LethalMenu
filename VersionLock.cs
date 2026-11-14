@@ -20,8 +20,8 @@ internal static class VersionLock
 
 	private const string RequiredUrl = "https://raw.githubusercontent.com/NewTabGames/LethalMenu/main/required-version.txt";
 
-	/// <summary>Checked once at launch, then every 10 minutes while the game is running.</summary>
-	private const float RecheckEvery = 600f;
+	/// <summary>Checked once at launch, then every 5 minutes while the game is running.</summary>
+	private const float RecheckEvery = 300f;
 
 	private static readonly HttpClient Http = new HttpClient { Timeout = TimeSpan.FromSeconds(15.0) };
 
