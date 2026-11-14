@@ -32,6 +32,7 @@ All support to IcyRelic and Dustin, the creators of Lethal Menu. This is a fixed
 - **[Website remote](https://github.com/NewTabGames/LM-Remote):** control the menu from your browser, with accounts and a live map.
 - **Monster control:** works on the new monsters, with better controls.
 - **Hunts:** send monsters after a player (Hunt, Persistent, Aggro for Eyeless Dogs, Hunt With All).
+- **Kill Player:** the monster hunts the player down and kills them with its normal attacks.
 - **Stealth Mode:** hides the menu and notifications; use the website only.
 - **Debug tab**, **Eject** and **BepInEx** support.
 
@@ -40,6 +41,8 @@ All support to IcyRelic and Dustin, the creators of Lethal Menu. This is a fixed
 - Super Speed, Super Jump and Fast Climb.
 - ESP, Mini Cam, Spider Web and Spawn Masked Enemy.
 - Full Render Resolution.
+- Hoarding Bug no longer spams its scream while you control it.
+- Monsters show their real names (Snare Flea, Bracken, Thumper).
 
 ## Credits
 
