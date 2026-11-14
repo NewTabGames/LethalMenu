@@ -118,7 +118,6 @@ internal class Settings
 			jObject4["PlayerHPDisplay"] = b_PlayerHPDisplay.ToString();
 			jObject4["ShowShipItems"] = b_ShowShipItems.ToString();
 			jObject4["FPSCounter"] = b_FPSCounter.ToString();
-			jObject4["DisplayLMUsers"] = b_DisplayLMUsers.ToString();
 			jObject4["StealthMode"] = b_StealthMode.ToString();
 			jObject4["HackHighlight"] = b_HackHighlight.ToString();
 			jObject4["FOV"] = f_fov.ToString();
@@ -127,7 +126,6 @@ internal class Settings
 			jObject4["ESPThickness"] = f_ESPThickness.ToString();
 			jObject4["ObjectQueueDelay"] = f_ObjectQueueDelay.ToString();
 			jObject4["NoFog"] = b_NoFog.ToString();
-			jObject4["DisplayHostKickedLobbies"] = b_DisplayHostKickedLobbies.ToString();
 			jObject5["Distance"] = f_chamDistance.ToString();
 			jObject5["Object"] = b_chamsObject.ToString();
 			jObject5["Enemy"] = b_chamsEnemy.ToString();
@@ -338,10 +336,6 @@ internal class Settings
 				{
 					b_HackHighlight = bool.Parse(value32.ToString());
 				}
-				if (jObject3.TryGetValue("DisplayLMUsers", out JToken value33))
-				{
-					b_DisplayLMUsers = bool.Parse(value33.ToString());
-				}
 				if (jObject3.TryGetValue("StealthMode", out JToken stealthValue))
 				{
 					b_StealthMode = bool.Parse(stealthValue.ToString());
@@ -369,10 +363,6 @@ internal class Settings
 				if (jObject3.TryGetValue("NoFog", out JToken value39))
 				{
 					b_NoFog = bool.Parse(value39.ToString());
-				}
-				if (jObject3.TryGetValue("DisplayHostKickedLobbies", out JToken value40))
-				{
-					b_DisplayHostKickedLobbies = bool.Parse(value40.ToString());
 				}
 				if (jObject3.TryGetValue("EnemyFilter", out JToken value41))
 				{
@@ -803,12 +793,8 @@ internal class Settings
 
 	public static bool b_FPSCounter = false;
 
-	public static bool b_DisplayLMUsers = false;
-
 	/// <summary>Stealth Mode: no menu, hotkeys or notifications on this PC; the website is the only control.</summary>
 	public static bool b_StealthMode = false;
-
-	public static bool b_DisplayHostKickedLobbies = false;
 
 	public static bool b_NoFog = false;
 

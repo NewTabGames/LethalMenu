@@ -43,7 +43,6 @@ internal class SelfTab : MenuTab
 		UI.Hack(Hack.UnlimitedOxygen, "SelfTab.UnlimitedOxygen");
 		UI.Hack(Hack.NoQuicksand, "SelfTab.NoQuicksand");
 		UI.Hack(Hack.AntiGhostGirl, "SelfTab.AntiGhostGirl");
-		UI.Hack(Hack.AntiKick, "SelfTab.AntiKick");
 		UI.SubHeader("Movement", space: true);
 		UI.HackSlider(Hack.SuperJump, "SelfTab.SuperJump", Settings.f_jumpForce.ToString("0.0"), ref Settings.f_jumpForce, Settings.f_defaultJumpForce, Settings.f_defaultJumpForce + 200f);
 		UI.HackSlider(Hack.FastClimb, "SelfTab.FastClimb", Settings.f_climbSpeed.ToString("0.0"), ref Settings.f_climbSpeed, Settings.f_defaultClimbSpeed, Settings.f_defaultClimbSpeed + 20f);

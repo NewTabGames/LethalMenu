@@ -19,10 +19,6 @@ public class MenuUtil
 
 	private static int oldHeight;
 
-	private static Coroutine LMUserCoroutine;
-
-	private static bool SendLMUserMessage = true;
-
 	public static float MouseX => Mouse.current.position.value.x;
 
 	public static float MouseY => (float)Screen.height - Mouse.current.position.value.y;
@@ -99,48 +95,6 @@ public class MenuUtil
 	/// <summary>Forgets coroutines/state owned by the destroyed menu object so a later load starts clean.</summary>
 	internal static void ResetForEject()
 	{
-		LMUserCoroutine = null;
-		SendLMUserMessage = true;
 		resizing = false;
-	}
-
-	public static void StartLMUser()
-	{
-		if (LMUserCoroutine == null)
-		{
-			LMUserCoroutine = LethalMenu.Instance.StartCoroutine(LMUser());
-		}
-		else
-		{
-			SendLMUserMessage = true;
-		}
-	}
-
-	private static IEnumerator LMUser()
-	{
-		while (!Settings.b_DisplayLMUsers || HUDManager.Instance == null || LethalMenu.localPlayer == null)
-		{
-			yield return new WaitForSeconds(10f);
-		}
-		HUDManager.Instance.Reflect().Invoke("AddTextMessageServerRpc", $"<size=0>{LethalMenu.localPlayer.playerSteamId}, {Settings.version}</size>");
-		Regex s = new Regex("\\b\\d{17,19}\\b");
-		Regex v = new Regex(",\\s*(v\\d+\\.\\d+\\.\\d+)");
-		while (Settings.b_DisplayLMUsers)
-		{
-			if (SendLMUserMessage)
-			{
-				SendLMUserMessage = false;
-				HUDManager.Instance.Reflect().Invoke("AddTextMessageServerRpc", $"<size=0>{LethalMenu.localPlayer.playerSteamId}, {Settings.version}</size>");
-			}
-			HUDManager.Instance.ChatMessageHistory.ToList().ForEach((string m) =>
-			{
-				if (s.Match(m).Success && v.Match(m).Success)
-				{
-					LethalMenu.Instance.LMUsers[s.Match(m).Value] = v.Match(m).Groups[1].Value;
-				}
-			});
-			yield return new WaitForSeconds(15f);
-		}
-		LMUserCoroutine = null;
 	}
 }

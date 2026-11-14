@@ -33,7 +33,6 @@ internal class Patches
 	private static IEnumerator LocalPlayerJoin()
 	{
 		yield return new WaitForSeconds(2f);
-		MenuUtil.StartLMUser();
 		LethalMenu.items.Where((GrabbableObject i) => i != null && !i.isInShipRoom).ToList().ForEach((GrabbableObject i) =>
 		{
 			i.isInShipRoom = true;
@@ -47,17 +46,9 @@ internal class Patches
 		ObjectManager.ClearObjects();
 		SpectatePlayer.Reset();
 		Freecam.Reset();
-		LethalMenu.Instance.LMUsers.Clear();
 		Shoplifter.Clear();
 		ServerTab.UpdatePlayerOptions(clear: true);
 		UnlimitedPresents.stuckpresent = false;
-	}
-
-	[HarmonyPatch(typeof(StartOfRound), "OnClientConnect")]
-	[HarmonyPostfix]
-	public static void OnClientConnect(StartOfRound __instance, ulong clientId)
-	{
-		MenuUtil.StartLMUser();
 	}
 
 	[HarmonyPatch(typeof(StartOfRound), "OnPlayerDC")]
@@ -72,16 +63,6 @@ internal class Patches
 	public static void StartClient(SteamId id)
 	{
 		Settings.s_lobbyid = id;
-	}
-
-	[HarmonyPatch(typeof(GameNetworkManager), "SteamMatchmaking_OnLobbyCreated")]
-	[HarmonyPrefix]
-	public static void SteamMatchmaking_OnLobbyCreated(GameNetworkManager __instance, Result result, Lobby lobby)
-	{
-		if (Settings.b_DisplayLMUsers)
-		{
-			__instance.lobbyHostSettings.lobbyName += "\u00ad";
-		}
 	}
 
 	[HarmonyPatch(typeof(QuickMenuManager), "CloseQuickMenu")]

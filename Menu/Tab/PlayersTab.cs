@@ -57,10 +57,6 @@ internal class PlayersTab : MenuTab
 					GUI.contentColor = Settings.c_playerESP.GetColor();
 				}
 				name = player.playerUsername;
-				if (LethalMenu.Instance.LMUsers.ContainsKey(player.playerSteamId.ToString()) && Settings.b_DisplayLMUsers)
-				{
-					name = "[Lethal Menu " + LethalMenu.Instance.LMUsers[player.playerSteamId.ToString()] + "] " + player.playerUsername;
-				}
 				if (GUILayout.Button(name, GUI.skin.label))
 				{
 					selectedPlayer = (int)player.playerClientId;

@@ -448,10 +448,6 @@ public static class HackExtensions
 			false
 		},
 		{
-			Hack.AntiKick,
-			false
-		},
-		{
 			Hack.DemiGod,
 			false
 		},

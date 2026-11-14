@@ -31,7 +31,7 @@ internal static class RemoteCatalog
 	/// <summary>Same tabs and sections as the in-game menu (keep the two in sync).</summary>
 	private static readonly (string Tab, string Group, string Hacks)[] Layout = new (string, string, string)[]
 	{
-		("Self", "Survival", "GodMode GhostMode Invisibility NoFallDamage UnlimitedOxygen NoQuicksand AntiGhostGirl AntiKick"),
+		("Self", "Survival", "GodMode GhostMode Invisibility NoFallDamage UnlimitedOxygen NoQuicksand AntiGhostGirl"),
 		("Self", "Movement", "SuperJump FastClimb SuperSpeed UnlimitedStamina NoClip FreeCam ClickTeleport TeleportWithItems Teleport TeleportShip SaveTeleportPosition TeleportSavedPosition"),
 		("Self", "Interaction", "Reach InteractThroughWalls LootThroughWalls LootThroughWallsBeltBag LootAnyItemBeltBag LootBeforeGameStarts NoCooldown InstantInteract UnlockObjects BuildAnywhere"),
 		("Self", "Items & Inventory", "ItemSlots Weight StrongHands UnlimitedBattery UnlimitedPresents UnlimitedTZP NoTZPEffects DropAllItems DeleteHeldItem TeleportAllItems TeleportOneItem SellEverything SellQuota Experience"),

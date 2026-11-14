@@ -65,7 +65,6 @@ public enum Hack
 	ClickKillAction,
 	LootAnyItemBeltBag,
 	LootThroughWallsBeltBag,
-	AntiKick,
 	SellQuota,
 	SellEverything,
 	TeleportAllItems,

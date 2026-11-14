@@ -79,8 +79,6 @@ public class LethalMenu : MonoBehaviour
 
 	public int fps;
 
-	public Dictionary<string, string> LMUsers = new Dictionary<string, string>();
-
 	public static Harmony harmony;
 
 	private HackMenu menu;
@@ -126,7 +124,6 @@ public class LethalMenu : MonoBehaviour
 		Theme.Initialize();
 		HarmonyPatching();
 		LoadCheats();
-		MenuUtil.StartLMUser();
 		ObjectManager.CollectObjects();
 		StartCoroutine(FPSCounter());
 		Remote.RemoteControl.Start();
