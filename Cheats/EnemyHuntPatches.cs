@@ -76,6 +76,29 @@ internal static class EnemyHuntPatches
 		// state 3 = mid-lunge: leave it alone, it comes back to state 2 by itself.
 	}
 
+	/// <summary>
+	/// Manticoils can't walk: on the ground their speed is 0, so a hunt left them frozen in place. While hunted,
+	/// make a landed one take off (the game's own "startled" take-off), and keep it from landing again or
+	/// turning away from players (it normally flies away from anyone it sees). Returns false while it is still
+	/// taking off.
+	/// </summary>
+	private static bool KeepBirdFlying(DoublewingAI bird, EnemyHunt.Hunt hunt)
+	{
+		if (bird.currentBehaviourStateIndex == 0)
+		{
+			if (Time.time >= hunt.NextEnrage)
+			{
+				hunt.NextEnrage = Time.time + 2f;
+				bird.AlertBirdServerRpc();
+			}
+			return false;
+		}
+		Traverse traverse = Traverse.Create(bird);
+		traverse.Field("currentGlideTime").SetValue(0f);
+		traverse.Field("avoidingPlayer").SetValue(0f);
+		return true;
+	}
+
 	[HarmonyPostfix]
 	private static void Steer(EnemyAI __instance)
 	{
@@ -98,6 +121,10 @@ internal static class EnemyHuntPatches
 		if (hunt.Aggro && __instance is MouthDogAI dog)
 		{
 			SteerAggroDog(dog, hunt, agent);
+			return;
+		}
+		if (__instance is DoublewingAI bird && !KeepBirdFlying(bird, hunt))
+		{
 			return;
 		}
 		if (hunt.Kill && EnemyHunt.SameArea(__instance, hunt.Target))

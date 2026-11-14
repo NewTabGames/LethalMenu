@@ -220,6 +220,10 @@ internal class EnemyHunt : Cheat
 		{
 			return EnemyName(enemy) + " can't walk anywhere";
 		}
+		if (enemy.daytimeEnemyLeaving)
+		{
+			return EnemyName(enemy) + " is leaving for the day";
+		}
 		if (persistent || aggro || kill)
 		{
 			return null; // it waits if they are in the other area, and takes over an existing chase
@@ -366,6 +370,11 @@ internal class EnemyHunt : Cheat
 			return "";
 		}
 		string name = EnemyName(enemy);
+		if (enemy.daytimeEnemyLeaving)
+		{
+			// Daytime monsters (Manticoils, bees...) all leave at a set time of day: they fly off and vanish.
+			return name + " is leaving for the day; its hunt is over";
+		}
 		if (target == null || !target.isPlayerControlled && !target.isPlayerDead)
 		{
 			return name + " stopped hunting: the player left";
