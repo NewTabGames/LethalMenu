@@ -27,7 +27,7 @@ internal class UnlockableManagerWindow(int id) : PopupMenu("UnlockableManager.Ti
 		if (unlockables.Count == 0)
 		{
 			unlockables = (from Unlockable u in Enum.GetValues(typeof(Unlockable))
-				where u != Unlockable.OrangeSuit
+				where u != Unlockable.OrangeSuit && u.Exists()
 				select u).ToList();
 		}
 		scrollPos = GUILayout.BeginScrollView(scrollPos);
@@ -51,7 +51,7 @@ internal class UnlockableManagerWindow(int id) : PopupMenu("UnlockableManager.Ti
 	{
 		if (!(HUDManager.Instance == null))
 		{
-			Enum.GetValues(typeof(Unlockable)).Cast<Unlockable>().ToList()
+			Enum.GetValues(typeof(Unlockable)).Cast<Unlockable>().Where((Unlockable u) => u.Exists()).ToList()
 				.ForEach((Unlockable u) =>
 				{
 					BuyUnlockable(u, enabled: false);

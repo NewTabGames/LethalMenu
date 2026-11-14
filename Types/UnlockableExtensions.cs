@@ -7,6 +7,14 @@ public static class UnlockableExtensions
 		return StartOfRound.Instance.unlockablesList.unlockables[(int)unlockable];
 	}
 
+	/// <summary>False when this game version doesn't have that unlockable (an older version, or before a lobby loads).</summary>
+	public static bool Exists(this Unlockable unlockable)
+	{
+		int index = (int)unlockable;
+		System.Collections.Generic.List<UnlockableItem> list = StartOfRound.Instance?.unlockablesList?.unlockables;
+		return list != null && index >= 0 && index < list.Count && list[index] != null;
+	}
+
 	public static void SetLocked(this Unlockable unlockable, bool locked)
 	{
 		UnlockableItem item = unlockable.GetItem();

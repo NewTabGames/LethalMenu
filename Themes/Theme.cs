@@ -19,7 +19,14 @@ public class Theme
 
 	public static void SetTheme(string t)
 	{
-		LoadTheme(name = (ThemeExists(t) ? t : "Default"));
+		string wanted = ThemeExists(t) ? t : "Default";
+		// Same as Lethal Menu 1.4.8: on startup the default theme and then the saved one were both loaded;
+		// loading the theme that is already on screen again is skipped.
+		if (wanted == name && Skin != null && AssetBundle != null)
+		{
+			return;
+		}
+		LoadTheme(name = wanted);
 	}
 
 	private static bool ThemeExists(string t)
@@ -63,6 +70,7 @@ public class Theme
 		if (AssetBundle == null)
 		{
 			Debug.LogError("[ERROR] Failed to load theme file => LethalMenu.Resources.Theme." + t + ".skin");
+			return;
 		}
 		Skin = AssetBundle.LoadAllAssets<GUISkin>().FirstOrDefault();
 		if (!(Skin == null))

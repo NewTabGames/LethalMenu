@@ -24,5 +24,11 @@ public enum Unlockable
 	PurpleSuit = 24,
 	BeeSuit = 25,
 	BunnySuit = 26,
-	DiscoBall = 27
+	DiscoBall = 27,
+	Microwave = 28,
+	SofaChair = 29,
+	Fridge = 30,
+	ClassicPainting = 31,
+	ElectricChair = 32,
+	DogHouse = 33
 }

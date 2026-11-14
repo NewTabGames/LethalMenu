@@ -448,17 +448,16 @@ public class EnemyHandler
 		{
 			return;
 		}
-		if (PlayerHandlerExtensions.IsHost(LethalMenu.localPlayer))
+		// Same as Lethal Menu 1.4.8: never change canDie (only the host saw that change, so the enemy looked dead
+		// to the host but stayed alive for everyone else). Enemies that can't die are removed for everyone instead;
+		// the rest die normally on every game. Works as host or client.
+		if (despawn || forceDespawnEnemies.Contains(enemy.GetType()) || !enemy.enemyType.canDie)
 		{
-			if (!enemy.enemyType.canDie)
-			{
-				enemy.enemyType.canDie = true;
-			}
-			enemy.KillEnemyServerRpc(forceDespawnEnemies.Contains(enemy.GetType()) | despawn);
+			RoundManager.Instance.DespawnEnemyServerRpc(enemy.GetComponent<NetworkObject>());
 		}
 		else
 		{
-			RoundManager.Instance.DespawnEnemyServerRpc(enemy.GetComponent<NetworkObject>());
+			enemy.KillEnemyServerRpc(false);
 		}
 		if (!NoAlert)
 		{
