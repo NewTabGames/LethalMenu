@@ -55,6 +55,9 @@ internal static class RemoteControl
 
 	private static CancellationTokenSource cancel;
 
+	/// <summary>The worker and command-stream threads, so quitting can wait for them to finish.</summary>
+	private static readonly List<Thread> Threads = new List<Thread>();
+
 	private static volatile string latestState;
 
 	private static float nextStateAt;
@@ -99,11 +102,11 @@ internal static class RemoteControl
 		cancel = new CancellationTokenSource();
 		Status = RemoteStatus.Connecting;
 		CancellationToken token = cancel.Token;
-		new Thread(() => WorkerLoop(token))
+		Track(new Thread(() => WorkerLoop(token))
 		{
 			IsBackground = true,
 			Name = "LethalMenu.Remote"
-		}.Start();
+		});
 	}
 
 	public static void Stop()
@@ -496,7 +499,7 @@ internal static class RemoteControl
 	private static void StartCommandStream(FirebaseClient firebase, string device, CancellationToken token)
 	{
 		bool firstSnapshot = true;
-		new Thread(() =>
+		Track(new Thread(() =>
 		{
 			while (!token.IsCancellationRequested)
 			{
@@ -540,7 +543,74 @@ internal static class RemoteControl
 		{
 			IsBackground = true,
 			Name = "LethalMenu.RemoteStream"
-		}.Start();
+		});
+	}
+
+	private static void Track(Thread thread)
+	{
+		lock (Threads)
+		{
+			Threads.RemoveAll(t => !t.IsAlive);
+			Threads.Add(thread);
+		}
+		thread.Start();
+	}
+
+	/// <summary>
+	/// The game is closing. Left alone, the connection threads were cut off by Unity in the middle of a network
+	/// read and the game froze ("not responding") instead of closing. Here they're stopped properly first: the
+	/// website is told this PC went offline (waiting at most 2 seconds), the open connections are closed, and the
+	/// threads get a moment to end on their own.
+	/// </summary>
+	public static void Shutdown()
+	{
+		FirebaseClient last = client;
+		bool wasConnected = Status == RemoteStatus.Connected;
+		if (cancel != null)
+		{
+			cancel.Cancel();
+			cancel = null;
+		}
+		client = null;
+		Status = RemoteStatus.Disabled;
+		if (last != null && wasConnected)
+		{
+			Thread offline = new Thread(() =>
+			{
+				try
+				{
+					last.Patch("devices/" + last.Uid + "/info", new Dictionary<string, object>
+					{
+						{ "online", false },
+						{ "lastSeen", ServerTimestamp }
+					});
+				}
+				catch
+				{
+				}
+			})
+			{
+				IsBackground = true
+			};
+			offline.Start();
+			offline.Join(2000);
+		}
+		FirebaseClient.CloseConnections();
+		Thread[] threads;
+		lock (Threads)
+		{
+			threads = Threads.ToArray();
+			Threads.Clear();
+		}
+		DateTime until = DateTime.UtcNow.AddSeconds(1.5);
+		foreach (Thread thread in threads)
+		{
+			int left = (int)(until - DateTime.UtcNow).TotalMilliseconds;
+			if (left > 0 && thread.IsAlive)
+			{
+				thread.Join(left);
+			}
+		}
 	}
 
 	private static void Accept(string id, JObject command, bool stale)

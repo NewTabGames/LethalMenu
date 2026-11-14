@@ -53,6 +53,19 @@ internal class FirebaseClient
 
 	public string Uid => config.Uid;
 
+	/// <summary>Quitting: aborts every request still open (above all the endless command stream).</summary>
+	public static void CloseConnections()
+	{
+		try
+		{
+			StreamHttp.CancelPendingRequests();
+			Http.CancelPendingRequests();
+		}
+		catch
+		{
+		}
+	}
+
 	/// <summary>Makes sure there is a valid ID token, refreshing or signing up anonymously as needed.</summary>
 	public string Token
 	{

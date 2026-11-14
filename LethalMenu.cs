@@ -127,6 +127,7 @@ public class LethalMenu : MonoBehaviour
 		ObjectManager.CollectObjects();
 		StartCoroutine(FPSCounter());
 		Remote.RemoteControl.Start();
+		QuitGuard.Install();
 	}
 
 	private void HarmonyPatching()
