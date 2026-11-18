@@ -1,5 +1,6 @@
 using HarmonyLib;
 using LethalMenu.Util;
+using UnityEngine;
 using Control = LethalMenu.Cheats.EnemyControl;
 
 namespace LethalMenu.Handler.EnemyControl;
@@ -19,6 +20,11 @@ internal class SpringManController : IEnemyController<SpringManAI>, IController
 	/// <summary>True while right click is held (read by <see cref="SpringManAIPatches"/>).</summary>
 	internal static bool HoldGo;
 
+	/// <summary>When a non-host driver next asks the host to reset the CoilHead's tiredness.</summary>
+	private float nextTireReset;
+
+	private float nextWakeTry;
+
 	private static bool Stopped(SpringManAI enemy)
 	{
 		return enemy.Reflect().GetValue<bool>("stoppingMovement");
@@ -27,6 +33,8 @@ internal class SpringManController : IEnemyController<SpringManAI>, IController
 	public void OnTakeControl(SpringManAI enemy)
 	{
 		HoldGo = false;
+		nextTireReset = 0f;
+		nextWakeTry = 0f;
 		// After 9 s of moving it rests for 20 s, and only its AI counts that rest down. Its AI is paused while you
 		// drive it, so a rest that started under you never ended: it stood frozen with nobody looking, for good.
 		// Wake it if it is resting; while you drive it, it doesn't tire (see the patch below).
@@ -57,13 +65,37 @@ internal class SpringManController : IEnemyController<SpringManAI>, IController
 		if (isAIControlled)
 		{
 			HoldGo = false;
+			return;
+		}
+		// The 9 s tiredness is counted on the host, not on the driver. With a non-host driver the host kept counting,
+		// put it to rest after about 9 s of moving, and nothing ever woke it. Ask the host to reset it now and then
+		// (any player may), and at once if it has gone to rest. Each reset blocks kills for a split second, so not
+		// more often than needed.
+		if (!enemy.IsServer && enemy.IsSpawned)
+		{
+			bool resting = enemy.onCooldownPhase > 0f || enemy.Reflect().GetValue<bool>("setOnCooldown");
+			if ((resting && Time.time >= nextWakeTry) || Time.time >= nextTireReset)
+			{
+				nextWakeTry = Time.time + 0.5f;
+				nextTireReset = Time.time + 7f;
+				enemy.SetCoilheadOnCooldownServerRpc(false);
+			}
 		}
 	}
 
 	public void UseSecondarySkill(SpringManAI enemy)
 	{
 		HoldGo = true;
-		if (Stopped(enemy))
+		if (Stopped(enemy) && enemy.IsOwner)
+		{
+			enemy.SetAnimationGoServerRpc();
+		}
+	}
+
+	public void OnSecondarySkillHold(SpringManAI enemy)
+	{
+		HoldGo = true;
+		if (Stopped(enemy) && enemy.IsOwner)
 		{
 			enemy.SetAnimationGoServerRpc();
 		}

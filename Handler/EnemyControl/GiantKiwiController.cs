@@ -35,6 +35,17 @@ internal class GiantKiwiController : IEnemyController<GiantKiwiAI>, IController
 		}
 	}
 
+	public void Update(GiantKiwiAI enemy, bool isAIControlled)
+	{
+		// The AI drives now (F9): a peck held from before must not carry over to when you take it back, where
+		// the bird kept pecking and couldn't pick a new target.
+		if (isAIControlled && (PeckHeld || attacking))
+		{
+			PeckHeld = false;
+			StopAttacking(enemy);
+		}
+	}
+
 	public void UsePrimarySkill(GiantKiwiAI enemy)
 	{
 		enemy.Screech(enraged: true, sync: true);
@@ -73,9 +84,18 @@ internal class GiantKiwiController : IEnemyController<GiantKiwiAI>, IController
 
 	private void StopAttacking(GiantKiwiAI enemy)
 	{
-		if (attacking)
+		attacking = false;
+		if (enemy == null)
 		{
-			attacking = false;
+			return;
+		}
+		enemy.Reflect().SetValue("watchingThreat", null);
+		enemy.Reflect().SetValue("attackingThreat", null);
+		enemy.watchingThreatTransform = null;
+		enemy.Reflect().SetValue("attacking", false);
+		enemy.creatureAnimator?.SetBool("Attacking", false);
+		if (enemy.IsBehaviourState(GiantKiwiState.ATTACKING))
+		{
 			enemy.SetBehaviourState(GiantKiwiState.PATROLLING);
 		}
 	}
@@ -118,6 +138,53 @@ internal static class GiantKiwiAIPatches
 
 	private static readonly AccessTools.FieldRef<GiantKiwiAI, bool> Attacking = AccessTools.FieldRefAccess<GiantKiwiAI, bool>("attacking");
 
+	private static readonly AccessTools.FieldRef<GiantKiwiAI, AudioSource> BirdNestAmbience = AccessTools.FieldRefAccess<GiantKiwiAI, AudioSource>("birdNestAmbience");
+
+	private static readonly AccessTools.FieldRef<GiantKiwiAI, float> PingAttentionTimer = AccessTools.FieldRefAccess<GiantKiwiAI, float>("pingAttentionTimer");
+
+	private static readonly AccessTools.FieldRef<GiantKiwiAI, IVisibleThreat> WatchingThreat = AccessTools.FieldRefAccess<GiantKiwiAI, IVisibleThreat>("watchingThreat");
+
+	private static readonly AccessTools.FieldRef<GiantKiwiAI, IVisibleThreat> AttackingThreat = AccessTools.FieldRefAccess<GiantKiwiAI, IVisibleThreat>("attackingThreat");
+
+	private static readonly AccessTools.FieldRef<GiantKiwiAI, float> WalkAnimSpeed = AccessTools.FieldRefAccess<GiantKiwiAI, float>("walkAnimSpeed");
+
+	[HarmonyPrefix]
+	[HarmonyPatch(typeof(GiantKiwiAI), nameof(GiantKiwiAI.Update))]
+	public static void UpdatePrefix(GiantKiwiAI __instance)
+	{
+		if (!Control.IsDrivenByYou(__instance) || __instance.isEnemyDead)
+		{
+			return;
+		}
+		if (__instance.birdNest == null || BirdNestAmbience(__instance) == null)
+		{
+			Transform fallback = __instance.transform.Find("FallbackBirdNest");
+			if (fallback == null)
+			{
+				GameObject go = new GameObject("FallbackBirdNest");
+				go.transform.SetParent(__instance.transform, worldPositionStays: false);
+				fallback = go.transform;
+			}
+			__instance.birdNest = fallback.gameObject;
+			BirdNestAmbience(__instance) = fallback.GetComponent<AudioSource>() ?? fallback.gameObject.AddComponent<AudioSource>();
+		}
+		PingAttentionTimer(__instance) = -1f;
+		if (!GiantKiwiController.PeckHeld)
+		{
+			WatchingThreat(__instance) = null;
+			AttackingThreat(__instance) = null;
+			__instance.watchingThreatTransform = null;
+			if (__instance.currentBehaviourStateIndex == 2)
+			{
+				__instance.SetBehaviourState(GiantKiwiState.PATROLLING);
+			}
+		}
+		else if (__instance.currentBehaviourStateIndex == 2)
+		{
+			BehaviourTimer(__instance) = 0f;
+		}
+	}
+
 	[HarmonyPostfix]
 	[HarmonyPatch(typeof(GiantKiwiAI), nameof(GiantKiwiAI.Update))]
 	public static void Update(GiantKiwiAI __instance)
@@ -142,12 +209,26 @@ internal static class GiantKiwiAIPatches
 		__instance.creatureAnimator.SetBool("Asleep", false);
 		__instance.creatureAnimator.SetBool("peckTree", false);
 		__instance.creatureAnimator.SetBool("Dancing", false);
-		// The game only pecks with a target within 10 m. Holding right click pecks anyway.
+		// The game only pecks with a target within 10 m. Holding right click pecks anyway; releasing stops immediately.
 		if (GiantKiwiController.PeckHeld && __instance.stunNormalizedTimer <= 0f)
 		{
 			Attacking(__instance) = true;
 			__instance.creatureAnimator.SetBool("Attacking", true);
 			__instance.creatureAnimator.SetFloat("attackSpeed", 1f);
+		}
+		else
+		{
+			Attacking(__instance) = false;
+			__instance.creatureAnimator.SetBool("Attacking", false);
+		}
+		bool sprinting = Control.YouAreMoving && Control.YouAreSprinting;
+		float desiredWalkAnim = sprinting ? 1.8f : 1f;
+		__instance.creatureAnimator.SetFloat("WalkSpeed", desiredWalkAnim);
+		__instance.creatureAnimator.SetBool("Running", sprinting);
+		if (Mathf.Abs(WalkAnimSpeed(__instance) - desiredWalkAnim) > 0.05f)
+		{
+			WalkAnimSpeed(__instance) = desiredWalkAnim;
+			__instance.SyncWalkAnimSpeedServerRpc(desiredWalkAnim);
 		}
 	}
 }

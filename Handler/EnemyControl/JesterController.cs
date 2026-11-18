@@ -34,6 +34,12 @@ internal class JesterController : IEnemyController<JesterAI>, IController
 	public void Update(JesterAI enemy, bool isAIControlled)
 	{
 		SetNoPlayerChasetimer(enemy, 100f);
+		// With a target from before you took over, the closed box counted down and started cranking by itself,
+		// freezing you in place. Only you start the cranking.
+		if (!isAIControlled && enemy.IsBehaviourState(JesterState.CLOSED))
+		{
+			enemy.beginCrankingTimer = UnityEngine.Mathf.Max(enemy.beginCrankingTimer, 10f);
+		}
 	}
 
 	public void OnReleaseControl(JesterAI enemy)

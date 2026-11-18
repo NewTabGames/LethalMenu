@@ -1,5 +1,6 @@
 using GameNetcodeStuff;
 using LethalMenu.Util;
+using UnityEngine;
 
 namespace LethalMenu.Handler.EnemyControl;
 
@@ -18,10 +19,17 @@ internal class BushWolfController : IEnemyController<BushWolfEnemy>, IController
 		{
 			return;
 		}
-		PlayerControllerB? player = ControlUtil.GetNearestPlayer(enemy, enemy.attackDistance + 10f);
+		// The victim's game only counts the hit if they're closer than attackDistance and nothing blocks the line
+		// from the tongue to their head; anyone further away always dodged, even though we said they were in range.
+		PlayerControllerB? player = ControlUtil.GetNearestPlayer(enemy, enemy.attackDistance - 0.5f);
 		if (player == null)
 		{
 			HUDManager.Instance?.DisplayTip("Lethal Menu", "No player in tongue range");
+			return;
+		}
+		if (enemy.tongueStartPoint != null && Physics.Linecast(enemy.tongueStartPoint.position, player.gameplayCamera.transform.position - Vector3.up * 0.3f, StartOfRound.Instance.collidersAndRoomMaskAndDefault, QueryTriggerInteraction.Ignore))
+		{
+			HUDManager.Instance?.DisplayTip("Lethal Menu", "No clear shot");
 			return;
 		}
 		enemy.targetPlayer = player;
@@ -50,6 +58,21 @@ internal class BushWolfController : IEnemyController<BushWolfEnemy>, IController
 		{
 			enemy.Reflect().SetValue("shootTongueTimer", 10f);
 		}
+		// Its own code made random mating calls (which froze its legs for 2 s while you kept moving) and growled and
+		// turned toward its last victim by itself. Keep calls and growls on your buttons only.
+		if (!isAIControlled && !draggingToDen && !enemy.IsBehaviourState(BushWolfState.ATTACKING))
+		{
+			enemy.targetPlayer = null;
+			enemy.staringAtPlayer = null;
+			ReflectionUtil<BushWolfEnemy> reflect = enemy.Reflect();
+			reflect.SetValue("timeSpentHiding", 0f);
+			// Under 7 s since its last call means no new one; 5 s or more means it doesn't count as just called
+			// (which makes it stand out to other monsters).
+			if (Time.realtimeSinceStartup - reflect.GetValue<float>("timeSinceCall") > 5.5f)
+			{
+				reflect.SetValue("timeSinceCall", Time.realtimeSinceStartup - 5.5f);
+			}
+		}
 	}
 
 	public void OnReleaseControl(BushWolfEnemy enemy)
@@ -59,7 +82,8 @@ internal class BushWolfController : IEnemyController<BushWolfEnemy>, IController
 
 	public void UseSecondarySkill(BushWolfEnemy enemy)
 	{
-		enemy.DoGrowlServerRpc();
+		// The growl message only plays on other machines; the game's local growl plays it here too and sends it.
+		enemy.Reflect().Invoke("DoGrowlLocalClient");
 	}
 
 	public void OnMovement(BushWolfEnemy enemy, bool isMoving, bool isSprinting)

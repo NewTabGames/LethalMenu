@@ -14,6 +14,8 @@ internal class BlobController : IEnemyController<BlobAI>, IController
 		enemy.Reflect().SetValue("angeredTimer", time);
 	}
 
+	// Calming has no network message in the game, so it only works on your machine: it stops the blob hurting your
+	// own body, not other players.
 	public void OnSecondarySkillHold(BlobAI enemy)
 	{
 		SetAngeredTimer(enemy, 0f);
@@ -25,9 +27,14 @@ internal class BlobController : IEnemyController<BlobAI>, IController
 		SetTamedTimer(enemy, 0f);
 	}
 
+	/// <summary>
+	/// Setting the anger timer directly only changed it on your screen. A zero-damage hit is the game's own synced
+	/// way to anger it: everyone sees and hears it get agitated.
+	/// </summary>
 	public void UsePrimarySkill(BlobAI enemy)
 	{
 		SetAngeredTimer(enemy, 18f);
+		enemy.HitEnemyServerRpc(0, -1, playHitSFX: false);
 	}
 
 	public float InteractRange(BlobAI _)
@@ -52,6 +59,6 @@ internal class BlobController : IEnemyController<BlobAI>, IController
 
 	public string GetSecondarySkillName(BlobAI _)
 	{
-		return "(HOLD) Calm down";
+		return "(HOLD) Calm down (only protects you)";
 	}
 }

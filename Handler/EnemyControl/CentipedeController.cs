@@ -1,13 +1,29 @@
+using HarmonyLib;
 using LethalMenu.Util;
 
 namespace LethalMenu.Handler.EnemyControl;
 
 internal class CentipedeController : IEnemyController<CentipedeAI>, IController
 {
+	private static readonly AccessTools.FieldRef<CentipedeAI, bool> TriggeredFall = AccessTools.FieldRefAccess<CentipedeAI, bool>("triggeredFall");
+
 	private bool IsClingingToSomething(CentipedeAI enemy)
 	{
 		ReflectionUtil<CentipedeAI> reflectionUtil = enemy.Reflect();
 		return (object)enemy.clingingToPlayer != null || enemy.inSpecialAnimation || reflectionUtil.GetValue<bool>("clingingToDeadBody") || reflectionUtil.GetValue<bool>("clingingToCeiling") || reflectionUtil.GetValue<bool>("startedCeilingAnimationCoroutine") || reflectionUtil.GetValue<bool>("inDroppingOffPlayerAnim");
+	}
+
+	public void Update(CentipedeAI enemy, bool isAIControlled)
+	{
+		if (isAIControlled || enemy == null)
+		{
+			return;
+		}
+		enemy.targetNode = null;
+		if (enemy.IsBehaviourState(CentipedeState.HIDING))
+		{
+			TriggeredFall(enemy) = true;
+		}
 	}
 
 	/// <summary>
@@ -25,10 +41,15 @@ internal class CentipedeController : IEnemyController<CentipedeAI>, IController
 
 	public void UseSecondarySkill(CentipedeAI enemy)
 	{
-		if (!IsClingingToSomething(enemy))
+		if (enemy.IsOwner && !IsClingingToSomething(enemy))
 		{
+			// The game's raycast switches to hiding (and syncs it) only when it finds a ceiling. Forcing the state
+			// without one made it fly to an old hiding spot, or the middle of the map, and get stuck there.
 			enemy.Reflect().Invoke("RaycastToCeiling");
-			enemy.SetBehaviourState(CentipedeState.HIDING);
+			if (!enemy.IsBehaviourState(CentipedeState.HIDING))
+			{
+				HUDManager.Instance?.DisplayTip("Lethal Menu", "No ceiling above");
+			}
 		}
 	}
 

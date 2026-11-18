@@ -1,4 +1,5 @@
 using GameNetcodeStuff;
+using HarmonyLib;
 using LethalMenu.Util;
 using Unity.Netcode;
 using UnityEngine;
@@ -7,6 +8,8 @@ namespace LethalMenu.Handler.EnemyControl;
 
 internal class HoarderBugController : IEnemyController<HoarderBugAI>, IController
 {
+	private static readonly AccessTools.FieldRef<HoarderBugAI, float> DetectPlayersInterval = AccessTools.FieldRefAccess<HoarderBugAI, float>("detectPlayersInterval");
+
 	/// <summary>Right click toggles this. While on, the bug stays in its angry chase pose and hurts players it touches.</summary>
 	private bool attacking;
 
@@ -44,13 +47,22 @@ internal class HoarderBugController : IEnemyController<HoarderBugAI>, IControlle
 		{
 			return;
 		}
+		if (!isAIControlled)
+		{
+			DetectPlayersInterval(enemy) = 1f;
+			enemy.watchingPlayer = null;
+			enemy.lookingAtPositionOfInterest = false;
+		}
 		if (attacking)
 		{
 			// Keep the game's anger aimed at the target. Also runs while the AI drives (F9),
 			// so the AI's own chase goes after the chosen player.
 			PlayerControllerB target = PickTarget(enemy);
 			enemy.angryAtPlayer = target;
-			enemy.watchingPlayer = target;
+			if (isAIControlled)
+			{
+				enemy.watchingPlayer = target;
+			}
 			enemy.targetPlayer = target;
 			if (enemy.angryTimer < 5f)
 			{
@@ -173,6 +185,10 @@ internal class HoarderBugController : IEnemyController<HoarderBugAI>, IControlle
 
 	public static void GrabItemAndCallGrabRPC(HoarderBugAI enemy, NetworkObject item)
 	{
+		if (!enemy.IsOwner)
+		{
+			return;
+		}
 		GrabItem(enemy, item);
 		enemy.Reflect().SetValue("sendingGrabOrDropRPC", true);
 		enemy.GrabItemServerRpc(item);
@@ -202,6 +218,10 @@ internal class HoarderBugController : IEnemyController<HoarderBugAI>, IControlle
 
 	private static void DropItemAndCallDropRPC(HoarderBugAI enemy, NetworkObject dropItemNetworkObject, bool droppedInNest = true)
 	{
+		if (!enemy.IsOwner)
+		{
+			return;
+		}
 		Vector3 targetFloorPosition = RoundManager.Instance.RandomlyOffsetPosition(enemy.heldItem.itemGrabbableObject.GetItemFloorPosition(), 1.2f, 0.4f);
 		DropItem(enemy, dropItemNetworkObject, targetFloorPosition);
 		enemy.Reflect().SetValue("sendingGrabOrDropRPC", true);

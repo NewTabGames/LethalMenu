@@ -1,14 +1,30 @@
+using HarmonyLib;
+using Control = LethalMenu.Cheats.EnemyControl;
+
 namespace LethalMenu.Handler.EnemyControl;
 
 internal class NutcrackerController : IEnemyController<NutcrackerEnemyAI>, IController
 {
+	private static readonly AccessTools.FieldRef<NutcrackerEnemyAI, float> TimeSinceInspecting = AccessTools.FieldRefAccess<NutcrackerEnemyAI, float>("timeSinceInspecting");
+
 	private bool InSentryMode { get; set; } = false;
 
 	public void Update(NutcrackerEnemyAI enemy, bool isAIControlled)
 	{
-		if (!isAIControlled && !InSentryMode)
+		if (isAIControlled || enemy == null)
 		{
+			return;
+		}
+		if (!InSentryMode)
+		{
+			// Its patrol drops into a look-around every few seconds by itself (in its Update, which still runs while
+			// you drive): it froze you and played its alert sound. Keep that timer from ever running out.
+			TimeSinceInspecting(enemy) = 0f;
 			enemy.SetBehaviourState(NutcrackerState.WALKING);
+		}
+		else if (!enemy.IsBehaviourState(NutcrackerState.SENTRY))
+		{
+			enemy.SetBehaviourState(NutcrackerState.SENTRY);
 		}
 	}
 
@@ -24,10 +40,10 @@ internal class NutcrackerController : IEnemyController<NutcrackerEnemyAI>, ICont
 
 	public void UsePrimarySkill(NutcrackerEnemyAI enemy)
 	{
-		ShotgunItem gun = enemy.gun;
-		if ((object)gun != null)
+		// The volume used to be turned down here on the real shotgun and never put back, so every later shot from
+		// that gun (its AI, or a player who picked it up) stayed quiet.
+		if (enemy.IsOwner && (object)enemy.gun != null)
 		{
-			gun.gunShootAudio.volume = 0.25f;
 			enemy.FireGunServerRpc();
 		}
 	}
@@ -67,5 +83,16 @@ internal class NutcrackerController : IEnemyController<NutcrackerEnemyAI>, ICont
 	public bool CanUseEntranceDoors(NutcrackerEnemyAI _)
 	{
 		return false;
+	}
+}
+
+[HarmonyPatch]
+internal static class NutcrackerAIPatches
+{
+	[HarmonyPrefix]
+	[HarmonyPatch(typeof(NutcrackerEnemyAI), nameof(NutcrackerEnemyAI.SeeMovingThreatServerRpc))]
+	public static bool SeeMovingThreatServerRpc(NutcrackerEnemyAI __instance)
+	{
+		return !Control.IsDrivenByYou(__instance);
 	}
 }

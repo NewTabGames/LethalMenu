@@ -25,8 +25,23 @@ internal static class SandSpiderAIPatches
 
 	private static readonly AccessTools.FieldRef<SandSpiderAI, Quaternion> TargetRotation = AccessTools.FieldRefAccess<SandSpiderAI, Quaternion>("meshContainerTargetRotation");
 
+	private static readonly AccessTools.FieldRef<SandSpiderAI, float> TimeSincePlacingWebTrap = AccessTools.FieldRefAccess<SandSpiderAI, float>("timeSincePlacingWebTrap");
+
+	private static readonly AccessTools.FieldRef<SandSpiderAI, bool> WatchFromDistance = AccessTools.FieldRefAccess<SandSpiderAI, bool>("watchFromDistance");
+
 	/// <summary>Farther than this from where you are and the body jumps straight there (teleports, entrances).</summary>
 	private const float SnapDistance = 4f;
+
+	[HarmonyPrefix]
+	[HarmonyPatch(typeof(SandSpiderAI), nameof(SandSpiderAI.Update))]
+	public static void Update(SandSpiderAI __instance)
+	{
+		if (Control.IsDrivenByYou(__instance))
+		{
+			TimeSincePlacingWebTrap(__instance) = 0f;
+			WatchFromDistance(__instance) = false;
+		}
+	}
 
 	// Runs right before the game moves the body each frame: aim it at where you are, facing where you face.
 	[HarmonyPrefix]

@@ -57,6 +57,10 @@ internal class AIMovement : MonoBehaviour
 
 	internal bool IsSprinting { get; private set; } = false;
 
+	internal bool IsSneaking { get; private set; } = false;
+
+	internal bool IsCrouching { get; set; } = false;
+
 	internal bool IsDashing => dashTimeRemaining > 0f;
 
 	internal bool IsGrounded => CharacterController != null && CharacterController.isGrounded;
@@ -192,7 +196,8 @@ internal class AIMovement : MonoBehaviour
 		input = Vector2.ClampMagnitude(input, 1f);
 		IsMoving = input.sqrMagnitude > 0.01f;
 		IsSprinting = IsMoving && inputAllowed && Keyboard.leftShiftKey.isPressed;
-		bool sneaking = inputAllowed && Keyboard.leftCtrlKey.isPressed && !IsSprinting && !Flying;
+		IsSneaking = inputAllowed && Keyboard.leftCtrlKey.isPressed && !IsSprinting && !Flying;
+		bool sneaking = (IsSneaking || IsCrouching) && !IsSprinting && !Flying;
 
 		if (CanClimbLadders && !Flying && UpdateLadder(input, inputAllowed, deltaTime))
 		{

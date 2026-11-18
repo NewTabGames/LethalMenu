@@ -1,3 +1,4 @@
+using GameNetcodeStuff;
 using HarmonyLib;
 using UnityEngine;
 using Control = LethalMenu.Cheats.EnemyControl;
@@ -24,7 +25,9 @@ internal class RadMechController : IEnemyController<RadMechAI>, IController
 		nextShot = 0f;
 		lowerGunAt = 0f;
 		// Out of its hunting mode (spotlight, aiming at targets); it isn't sent flying off while driven either.
-		if (enemy.currentBehaviourStateIndex == 1 && enemy.IsServer)
+		// Any player may ask for the switch; the host then turns the spotlight and gun off for everyone. (A client
+		// driver used to leave it hunting, still firing at its old target.)
+		if (enemy.currentBehaviourStateIndex == 1)
 		{
 			enemy.SwitchToBehaviourState(0);
 		}
@@ -36,10 +39,30 @@ internal class RadMechController : IEnemyController<RadMechAI>, IController
 		{
 			enemy.creatureAnimator.SetBool("AimGun", false);
 		}
+		if (enemy != null)
+		{
+			RestoreStepGap(enemy);
+		}
+	}
+
+	/// <summary>
+	/// Driven, it steps with almost no pause (see the patch below). Its patrol sets its normal pause only when
+	/// it starts patrolling, so handed back mid-patrol it kept marching about 14 times too fast.
+	/// </summary>
+	private static void RestoreStepGap(RadMechAI enemy)
+	{
+		if (enemy.currentBehaviourStateIndex == 0 && enemy.timeBetweenSteps < 0.7f)
+		{
+			enemy.timeBetweenSteps = 0.7f;
+		}
 	}
 
 	public void Update(RadMechAI enemy, bool isAIControlled)
 	{
+		if (isAIControlled)
+		{
+			RestoreStepGap(enemy); // F9: its AI walks it again
+		}
 		if (lowerGunAt > 0f && Time.time >= lowerGunAt && enemy.creatureAnimator != null)
 		{
 			lowerGunAt = 0f;
@@ -64,6 +87,7 @@ internal class RadMechController : IEnemyController<RadMechAI>, IController
 			return;
 		}
 		nextShot = Time.time + FireCooldown;
+		Control.EnsureMapPropsContainer();
 		Vector3 from = enemy.gunPoint.position;
 		Vector3 direction = Control.AimPoint(120f) - from;
 		if (direction.sqrMagnitude < 0.01f)
@@ -99,6 +123,10 @@ internal static class RadMechAIPatches
 {
 	private static readonly AccessTools.FieldRef<RadMechAI, bool> TakingStep = AccessTools.FieldRefAccess<RadMechAI, bool>("takingStep");
 
+	private static readonly AccessTools.FieldRef<RadMechAI, bool> WaitingToAttemptGrab = AccessTools.FieldRefAccess<RadMechAI, bool>("waitingToAttemptGrab");
+
+	private static readonly AccessTools.FieldRef<RadMechAI, bool> AttemptingGrab = AccessTools.FieldRefAccess<RadMechAI, bool>("attemptingGrab");
+
 	// Its walk is a series of steps the game starts on a timer, whether it goes anywhere or not: it marched on
 	// the spot while standing still, and paused between steps while you moved smoothly. Driven, it only steps
 	// while you move, one step straight after the other.
@@ -121,5 +149,31 @@ internal static class RadMechAIPatches
 		}
 		__instance.timeBetweenSteps = 0.05f;
 		return true;
+	}
+
+	[HarmonyPrefix]
+	[HarmonyPatch(typeof(RadMechAI), nameof(RadMechAI.AttemptGrabIfClose))]
+	public static bool AttemptGrabIfClose(RadMechAI __instance)
+	{
+		if (!Control.IsDrivenByYou(__instance) || WaitingToAttemptGrab(__instance) || AttemptingGrab(__instance) || StartOfRound.Instance?.allPlayerScripts == null)
+		{
+			return true;
+		}
+		foreach (PlayerControllerB player in StartOfRound.Instance.allPlayerScripts)
+		{
+			if (player == null || !player.isPlayerControlled || player.isPlayerDead)
+			{
+				continue;
+			}
+			if (!Control.TargetingYourself && (object)player == LethalMenu.localPlayer)
+			{
+				continue;
+			}
+			if (Vector3.Distance(__instance.transform.position, player.transform.position) < 5.2f)
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 }

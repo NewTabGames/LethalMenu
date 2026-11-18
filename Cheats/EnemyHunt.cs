@@ -351,8 +351,12 @@ internal class EnemyHunt : Cheat
 				continue;
 			}
 			EnemyAI enemy = hunt.Enemy;
-			// Only the owner's game runs a monster's AI, so we need to own it to steer it.
-			if (!enemy.IsOwner && me != null && Time.time >= hunt.NextOwnerRequest)
+			// Only the owner's game runs a monster's AI, so we need to own it to steer it. But many monsters (the
+			// CoilHead, Bracken, Jester, Ghost Girl...) hand themselves to the player they're chasing: their kill only
+			// lands reliably on that player's own game. Taking it back every second made it switch between games
+			// mid-chase, so it bumped into them for seconds before it finally hurt them. Leave it with them then.
+			bool huntedPlayerHasIt = hunt.Target != null && enemy.OwnerClientId == hunt.Target.actualClientId && IsChasing(enemy);
+			if (!enemy.IsOwner && !huntedPlayerHasIt && me != null && Time.time >= hunt.NextOwnerRequest)
 			{
 				hunt.NextOwnerRequest = Time.time + 1f;
 				enemy.ChangeEnemyOwnerServerRpc(me.actualClientId);

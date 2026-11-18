@@ -110,6 +110,18 @@ internal class EnemyControl : Cheat
 
 	internal static bool IsOnGround => movement == null || movement.IsGrounded;
 
+	internal static bool IsOnLadder => movement != null && movement.OnLadder;
+
+	internal static bool IsSneaking => movement != null && movement.IsSneaking;
+
+	internal static void SetCrouching(bool crouching)
+	{
+		if (movement != null)
+		{
+			movement.IsCrouching = crouching;
+		}
+	}
+
 	internal static float VerticalSpeed => movement != null ? movement.VerticalVelocity : 0f;
 
 	internal static void SetFlying(bool flying)
@@ -169,6 +181,9 @@ internal class EnemyControl : Cheat
 	/// <summary>Whether the controlled Maneater was grown up last frame (it grows while being driven).</summary>
 	private static bool wasAdult;
 
+	/// <summary>Last seen HP of the controlled spider, so its hurt speed boost updates live.</summary>
+	private static int lastSpiderHP;
+
 	private static float nextOwnershipRequest;
 
 	/// <summary>Sprint speed divided by walk speed for the enemy being controlled.</summary>
@@ -183,7 +198,7 @@ internal class EnemyControl : Cheat
 		{ "BaboonBirdAI", (9f, 12f) },
 		{ "BlobAI", (0.6f, 3f) },
 		{ "BushWolfEnemy", (5f, 14f) },
-		{ "ButlerBeesEnemyAI", (4f, 10f) },
+		{ "ButlerBeesEnemyAI", (3f, 5.4f) },
 		{ "ButlerEnemyAI", (4f, 9f) },
 		{ "CadaverBloomAI", (5f, 10f) },
 		{ "CaveDwellerAI", (4f, 6.25f) },
@@ -196,7 +211,7 @@ internal class EnemyControl : Cheat
 		{ "FlowerSnakeEnemy", (4.5f, 7f) },
 		{ "FlowermanAI", (4f, 9f) },
 		{ "ForestGiantAI", (5f, 8f) },
-		{ "GiantKiwiAI", (4f, 16f) },
+		{ "GiantKiwiAI", (8f, 16f) },
 		{ "HoarderBugAI", (6f, 16f) },
 		{ "JesterAI", (5f, 16f) },
 		{ "LassoManAI", (5f, 6f) },
@@ -207,7 +222,7 @@ internal class EnemyControl : Cheat
 		{ "PumaAI", (6f, 14f) },
 		{ "RadMechAI", (4f, 8f) },
 		{ "RedLocustBees", (4f, 10.3f) },
-		{ "SandSpiderAI", (4.5f, 6f) },
+		{ "SandSpiderAI", (4.25f, 4.4f) },
 		{ "SandWormAI", (4f, 8f) },
 		{ "SpringManAI", (6f, 14f) },
 		{ "StingrayAI", (5.5f, 11f) },
@@ -359,6 +374,14 @@ internal class EnemyControl : Cheat
 		}
 	};
 
+	public static void EnsureMapPropsContainer()
+	{
+		if (RoundManager.Instance != null && RoundManager.Instance.mapPropsContainer == null)
+		{
+			RoundManager.Instance.mapPropsContainer = GameObject.FindGameObjectWithTag("MapPropsContainer");
+		}
+	}
+
 	public static void Control(EnemyAI enemy)
 	{
 		if (enemy == null || enemy.isEnemyDead)
@@ -391,6 +414,7 @@ internal class EnemyControl : Cheat
 			audioListener = null;
 		}
 		EnemyControl.enemy = enemy;
+		EnsureMapPropsContainer();
 		IController value = GetControllerForEnemy(enemy);
 		if (value is DefaultController)
 		{
@@ -417,11 +441,13 @@ internal class EnemyControl : Cheat
 		mouse.SetYaw(enemy.transform.eulerAngles.y);
 		CalibrateForEnemy(enemy);
 		wasAdult = enemy is CaveDwellerAI d && d.adultContainer != null && d.adultContainer.activeSelf;
+		lastSpiderHP = enemy is SandSpiderAI ? enemy.enemyHP : -1;
 		LungeCooldownRemaining = 0f;
 		PrimaryCooldownRemaining = 0f;
 		SecondaryCooldownRemaining = 0f;
 		SecondaryHeld = false;
 		ChosenTarget = null;
+		IsAIControlled = false; // a cleanup that broke off early could leave this on, starting the next monster frozen
 		SetAIControl(enableAI: false);
 		ChangeAudioListener(audioListener);
 	}
@@ -437,12 +463,14 @@ internal class EnemyControl : Cheat
 		Hack.EnemyControl.SetToggle(b: false);
 		if (Settings.isMenuOpen)
 		{
+			// The local player can be gone here (just disconnected); this used to throw and skip the rest of the cleanup.
 			PlayerControllerB localPlayer = LethalMenu.localPlayer;
-			if ((((object)localPlayer != null) ? new bool?(!localPlayer.playerActions.Movement.enabled) : ((bool?)null)).Value)
+			if (localPlayer != null && !localPlayer.playerActions.Movement.enabled)
 			{
-				LethalMenu.localPlayer?.playerActions.Enable();
+				localPlayer.playerActions.Enable();
 			}
 		}
+		ForceReleaseSecondary();
 		if (enemy?.agent != null)
 		{
 			// Hand the AI back a monster that is standing on its walkable floor (nav mesh), even if it was
@@ -535,9 +563,16 @@ internal class EnemyControl : Cheat
 			wasAdult = dweller.adultContainer.activeSelf;
 			CalibrateForEnemy(enemy);
 		}
+		if (enemy is SandSpiderAI && enemy.enemyHP != lastSpiderHP)
+		{
+			lastSpiderHP = enemy.enemyHP;
+			CalibrateForEnemy(enemy);
+		}
 		// Ask the host to make us the owner only while we aren't, and at most 4 times a second: the answer takes
 		// a network round trip, and every extra request is another ownership change sent to every player.
-		if (enemy.IsSpawned && !enemy.IsOwner && Time.time >= nextOwnershipRequest)
+		// Not while the AI drives (F9): many AIs hand themselves to the player they chase (Bracken, Ghost Girl,
+		// Butler, bees...), and taking it back made ownership bounce between machines and the AI never settle.
+		if (!IsAIControlled && enemy.IsSpawned && !enemy.IsOwner && Time.time >= nextOwnershipRequest)
 		{
 			nextOwnershipRequest = Time.time + 0.25f;
 			enemy.ChangeEnemyOwnerServerRpc(LethalMenu.localPlayer.actualClientId);
@@ -546,7 +581,10 @@ internal class EnemyControl : Cheat
 		try
 		{
 			value.Update(enemy, IsAIControlled);
-			InteractWithAmbient(enemy, value);
+			if (!IsAIControlled)
+			{
+				InteractWithAmbient(enemy, value);
+			}
 			HandleInput(value);
 			if (enemy == null)
 			{
@@ -648,6 +686,11 @@ internal class EnemyControl : Cheat
 				// It moves only during each hop, covering what the game's own hop covers (see ClaySurgeonController).
 				float hop = ClaySurgeonController.HopSpeed(barber, Mathf.Max(barber.jumpTime, 0.05f));
 				speeds = (hop, hop);
+			}
+			else if (enemy is SandSpiderAI)
+			{
+				// The game's spider chases faster as it gets hurt: 4.4, then 4.58 at 2 HP, then 5.04 at 1 HP.
+				speeds.Run = enemy.enemyHP >= 3 ? 4.4f : (enemy.enemyHP == 2 ? 4.58f : 5.04f);
 			}
 			else if (enemy is RadMechAI mech)
 			{
@@ -989,11 +1032,7 @@ internal class EnemyControl : Cheat
 		bool blocked = Cursor.visible || Settings.isMenuOpen || IsAIControlled;
 		if (blocked)
 		{
-			if (SecondaryHeld)
-			{
-				SecondaryHeld = false;
-				ReleaseSecondarySkill();
-			}
+			ForceReleaseSecondary();
 		}
 		else
 		{
@@ -1060,8 +1099,15 @@ internal class EnemyControl : Cheat
 	{
 		if ((object)enemy?.agent != null && (object)movement != null && (object)mouse != null)
 		{
+			// Let go of a held right click while you still drive it, so the controller leaves its held state
+			// (a giant stuck chasing, a nutcracker stuck in sentry mode, a kiwi stuck pecking).
+			ForceReleaseSecondary();
 			IsAIControlled = !IsAIControlled;
 			SetAIControl(IsAIControlled);
+			if (!IsAIControlled)
+			{
+				nextOwnershipRequest = 0f; // the AI may have handed it to someone else: ask for it back right away
+			}
 		}
 	}
 
@@ -1096,6 +1142,13 @@ internal class EnemyControl : Cheat
 			}
 		}
 		agent.Warp(nearest.position);
+		// The warp drops the agent's path, but the AI only asks for a new one when its destination changes, so a
+		// monster still heading to its old search spot stood still after hand-back. Make it path again from here.
+		if (agent.isOnNavMesh)
+		{
+			agent.ResetPath();
+		}
+		HarmonyLib.Traverse.Create(target).Field("prevDestination").SetValue(Vector3.zero);
 		target.transform.position = nearest.position;
 		target.SyncPositionToClients();
 		return agent.isOnNavMesh;
@@ -1156,6 +1209,11 @@ internal class EnemyControl : Cheat
 
 	public void OpenDoorAsEnemy(DoorLock door)
 	{
+		// Monsters in the game can't open locked doors; doing it here left a door open but still locked.
+		if (door.isLocked)
+		{
+			return;
+		}
 		if (!door.Reflect().GetValue<bool>("isDoorOpened"))
 		{
 			if (door.gameObject.TryGetComponent<AnimatedObjectTrigger>(out var component))
@@ -1173,13 +1231,40 @@ internal class EnemyControl : Cheat
 
 	public void InteractWithTeleport(EnemyAI enemy, EntranceTeleport teleport)
 	{
+		if (IsAIControlled)
+		{
+			return;
+		}
 		AIMovement aIMovement = movement;
 		if ((object)aIMovement != null)
 		{
 			Transform exitPointFromDoor = GetExitPointFromDoor(teleport);
 			if ((object)exitPointFromDoor != null)
 			{
-				aIMovement.SetPosition(exitPointFromDoor.position);
+				// Tell the monster which side it is on now. Without this it kept its old side: its AI used the
+				// wrong side's nodes after F9/F11, and players on the new side couldn't be hurt by touching it.
+				bool goingOutside = !teleport.isEntranceToBuilding;
+				bool synced = false;
+				if (enemy is MaskedPlayerEnemy masked && masked.IsOwner)
+				{
+					// The Masked has the game's own synced door teleport, which sets the side on every player's copy.
+					try
+					{
+						HarmonyLib.Traverse.Create(masked).Method("TeleportMaskedEnemyAndSync", new Type[2] { typeof(Vector3), typeof(bool) }, new object[2] { exitPointFromDoor.position, goingOutside }).GetValue();
+						aIMovement.SetPosition(masked.transform.position); // the game puts it on the nearest walkable spot
+						synced = true;
+					}
+					catch (Exception ex)
+					{
+						Debug.LogWarning("[LethalMenu] Masked door teleport: " + ex.Message);
+					}
+				}
+				if (!synced)
+				{
+					// Other monsters have no synced way to change sides, so only your copy knows the new side.
+					aIMovement.SetPosition(exitPointFromDoor.position);
+					enemy.SetEnemyOutside(goingOutside);
+				}
 				enemy.EnableEnemyMesh(true, false);
 			}
 		}
@@ -1220,6 +1305,31 @@ internal class EnemyControl : Cheat
 		if (!(enemy == null) && !IsAIControlled)
 		{
 			GetControllerForEnemy(enemy).ReleaseSecondarySkill(enemy);
+		}
+	}
+
+	/// <summary>
+	/// Releases a held right click even when the AI drives or control is ending. The normal release skips that
+	/// case, which left controllers stuck in their held state after F9 or F11.
+	/// </summary>
+	private static void ForceReleaseSecondary()
+	{
+		if (!SecondaryHeld)
+		{
+			return;
+		}
+		SecondaryHeld = false;
+		if (enemy == null)
+		{
+			return;
+		}
+		try
+		{
+			GetControllerForEnemy(enemy)?.ReleaseSecondarySkill(enemy);
+		}
+		catch (Exception ex)
+		{
+			Debug.LogWarning("[LethalMenu] Release right click: " + ex.Message);
 		}
 	}
 }

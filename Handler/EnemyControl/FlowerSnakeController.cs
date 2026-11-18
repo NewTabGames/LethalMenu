@@ -1,6 +1,7 @@
 using HarmonyLib;
 using LethalMenu.Util;
 using UnityEngine;
+using UnityEngine.AI;
 using Control = LethalMenu.Cheats.EnemyControl;
 
 namespace LethalMenu.Handler.EnemyControl;
@@ -37,6 +38,24 @@ internal class FlowerSnakeController : IEnemyController<FlowerSnakeEnemy>, ICont
 	public bool IsAbleToRotate(FlowerSnakeEnemy enemy)
 	{
 		return IsAbleToMove(enemy);
+	}
+
+	private float nextLeapSync;
+
+	public void Update(FlowerSnakeEnemy enemy, bool isAIControlled)
+	{
+		// Only the host can show the leap to everyone. For anyone else the leap ran on their screen only, and the
+		// game stops sending the snake's position during a leap, so the others saw it sit still and then jump to
+		// where it landed (it could never land on them). Send the position along the arc instead.
+		if (isAIControlled || enemy == null || enemy.IsServer || !Leaping(enemy))
+		{
+			return;
+		}
+		if (Time.time >= nextLeapSync)
+		{
+			nextLeapSync = Time.time + 0.05f;
+			enemy.SyncPositionToClients();
+		}
 	}
 
 	public void UsePrimarySkill(FlowerSnakeEnemy enemy)
@@ -117,6 +136,32 @@ internal class FlowerSnakeController : IEnemyController<FlowerSnakeEnemy>, ICont
 	public float InteractRange(FlowerSnakeEnemy _)
 	{
 		return 5f;
+	}
+}
+
+[HarmonyPatch]
+internal static class FlowerSnakeAIPatches
+{
+	private static readonly AccessTools.FieldRef<EnemyAI, int> AgentMask = AccessTools.FieldRefAccess<EnemyAI, int>("agentMask");
+
+	/// <summary>
+	/// On a non-host client, StopLeapOnLocalClient(landOnGround: true) uses overrideLandingPosition instead of
+	/// sampling the NavMesh, which defaults to (0, 0, 0). That pulled the driven snake toward world origin and
+	/// marked indoor snakes as outside. Compute the landing position on the driver the same way the host does.
+	/// </summary>
+	[HarmonyPrefix]
+	[HarmonyPatch(typeof(FlowerSnakeEnemy), nameof(FlowerSnakeEnemy.StopLeapOnLocalClient))]
+	public static void StopLeapOnLocalClientPrefix(FlowerSnakeEnemy __instance, bool landOnGround, ref Vector3 overrideLandingPosition)
+	{
+		if (landOnGround && !__instance.IsServer && overrideLandingPosition == default && Control.IsDrivenByYou(__instance))
+		{
+			Vector3 pos = RoundManager.Instance.GetNavMeshPosition(__instance.transform.position, default(NavMeshHit), 15f, AgentMask(__instance));
+			if (!RoundManager.Instance.GotNavMeshPositionResult)
+			{
+				pos = __instance.transform.position;
+			}
+			overrideLandingPosition = pos;
+		}
 	}
 }
 

@@ -1,3 +1,4 @@
+using LethalMenu.Util;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -5,10 +6,6 @@ namespace LethalMenu.Handler.EnemyControl;
 
 internal class BaboonBirdController : IEnemyController<BaboonBirdAI>, IController
 {
-	private Vector3 CustomCamp { get; } = new Vector3(1000f, 0f, 0f);
-
-	private Vector3 OriginalCamp { get; set; } = Vector3.zero;
-
 	public void OnDeath(BaboonBirdAI enemy)
 	{
 		if (!(enemy == null) && !(enemy.heldScrap == null))
@@ -17,21 +14,39 @@ internal class BaboonBirdController : IEnemyController<BaboonBirdAI>, IControlle
 		}
 	}
 
-	public void OnTakeControl(BaboonBirdAI enemy)
-	{
-		if (!(enemy == null) && BaboonBirdAI.baboonCampPosition != CustomCamp)
-		{
-			OriginalCamp = BaboonBirdAI.baboonCampPosition;
-			BaboonBirdAI.baboonCampPosition = CustomCamp;
-		}
-	}
+	// The camp position is no longer moved while you drive: it's shared by every baboon, so moving it sent all the
+	// others wandering off and looting their own camp. A driven baboon's AI is paused, so it never drops scrap at
+	// camp by itself anyway.
 
-	public void OnReleaseControl(BaboonBirdAI enemy)
+	/// <summary>
+	/// Only its AI made a resting baboon get up, and that's paused while you drive, so one taken from camp kept
+	/// sitting or sleeping while you moved it. Get it up, for everyone.
+	/// </summary>
+	public void Update(BaboonBirdAI enemy, bool isAIControlled)
 	{
-		if (!(enemy == null) && BaboonBirdAI.baboonCampPosition == CustomCamp)
+		if (isAIControlled || enemy == null || !enemy.IsOwner || enemy.creatureAnimator == null)
 		{
-			BaboonBirdAI.baboonCampPosition = OriginalCamp;
+			return;
 		}
+		bool sitting = enemy.creatureAnimator.GetBool("sit");
+		bool sleeping = enemy.creatureAnimator.GetBool("sleep");
+		if (!sitting && !sleeping)
+		{
+			return;
+		}
+		enemy.creatureAnimator.SetBool("sit", false);
+		enemy.creatureAnimator.SetBool("sleep", false);
+		if (sitting)
+		{
+			enemy.EnemyGetUpServerRpc();
+		}
+		// Others only stop the sleep pose when it's back in its normal state.
+		if (enemy.currentBehaviourStateIndex == 1)
+		{
+			enemy.SwitchToBehaviourState(0);
+		}
+		enemy.Reflect().SetValue("restingAtCamp", false);
+		enemy.Reflect().SetValue("eyesClosed", false);
 	}
 
 	public void UsePrimarySkill(BaboonBirdAI enemy)

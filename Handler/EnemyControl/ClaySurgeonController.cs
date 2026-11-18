@@ -7,10 +7,8 @@ namespace LethalMenu.Handler.EnemyControl;
 /// </summary>
 internal class ClaySurgeonController : IEnemyController<ClaySurgeonAI>, IController
 {
-	public void OnTakeControl(ClaySurgeonAI enemy)
-	{
-		enemy.SyncMasterClaySurgeonClientRpc();
-	}
+	// No master re-sync on take-control: the game already picks the master Barber, and re-running it on clients
+	// broke their music and stopped Barbers hopping or cutting again there.
 
 	public bool IsAbleToMove(ClaySurgeonAI enemy)
 	{

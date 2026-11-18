@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Linq;
 using GameNetcodeStuff;
+using LethalMenu.Util;
 using UnityEngine;
 
 namespace LethalMenu.Handler;
@@ -50,8 +51,23 @@ public static class GrabbableObjectExtensions
 
 	public static void ShootGunAsEnemy(this ShotgunItem shotgun, EnemyAI enemy)
 	{
-		shotgun.gunShootAudio.volume = 0.15f;
-		shotgun.shotgunRayPoint = enemy.transform;
-		shotgun.ShootGunAndSync(heldByPlayer: false);
+		// Shoot from the monster's head toward where you aim, without touching the gun's own muzzle point. It
+		// used to be swapped for the monster permanently: later shots from that gun measured distance from the
+		// monster, and once the monster was gone they threw errors and couldn't hurt you any more.
+		Vector3 position = enemy.eye != null ? enemy.eye.position : enemy.transform.position + Vector3.up;
+		Vector3 forward = Cheats.EnemyControl.AimPoint(30f) - position;
+		forward = forward.sqrMagnitude > 0.0001f ? forward.normalized : enemy.transform.forward;
+		float oldVolume = shotgun.gunShootAudio != null ? shotgun.gunShootAudio.volume : 1f;
+		if (shotgun.gunShootAudio != null)
+		{
+			shotgun.gunShootAudio.volume = 0.15f;
+		}
+		shotgun.ShootGun(position, forward);
+		if (shotgun.gunShootAudio != null)
+		{
+			shotgun.gunShootAudio.volume = oldVolume;
+		}
+		shotgun.Reflect().SetValue("localClientSendingShootGunRPC", true); // the game's flag: don't fire it twice here
+		shotgun.ShootGunServerRpc(position, forward);
 	}
 }

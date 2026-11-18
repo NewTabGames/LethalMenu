@@ -38,9 +38,27 @@ internal class DoublewingController : IEnemyController<DoublewingAI>, IControlle
 		}
 	}
 
+	public void OnReleaseControl(DoublewingAI enemy)
+	{
+		// An alert that came in while you drove it must not leave the bird ignoring everyone afterwards.
+		if (enemy != null)
+		{
+			enemy.Reflect().SetValue("alertingBird", false);
+		}
+	}
+
 	public void UsePrimarySkill(DoublewingAI enemy)
 	{
-		enemy.Reflect().Invoke("BirdScreech");
+		// The screech on its own only plays on your machine. The host can send it to everyone; there is no way
+		// for anyone else to ask for that.
+		if (enemy.IsServer)
+		{
+			enemy.BirdScreechClientRpc();
+		}
+		else
+		{
+			enemy.Reflect().Invoke("BirdScreech");
+		}
 	}
 
 	public void UseSecondarySkill(DoublewingAI enemy)
@@ -48,9 +66,9 @@ internal class DoublewingController : IEnemyController<DoublewingAI>, IControlle
 		Cheats.EnemyControl.SetFlying(!Cheats.EnemyControl.IsFlying);
 	}
 
-	public string GetPrimarySkillName(DoublewingAI _)
+	public string GetPrimarySkillName(DoublewingAI enemy)
 	{
-		return "Screech";
+		return enemy.IsServer ? "Screech" : "Screech (only you hear it)";
 	}
 
 	public string GetSecondarySkillName(DoublewingAI _)

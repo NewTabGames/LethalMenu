@@ -43,6 +43,16 @@ internal class Patches
 	[HarmonyPostfix]
 	public static void Disconnect(GameNetworkManager __instance)
 	{
+		// The monster may already be gone when you leave; a failure here must not skip the rest of the cleanup.
+		try
+		{
+			EnemyControl.StopControl();
+			EnemyHunt.StopAll();
+		}
+		catch (System.Exception ex)
+		{
+			UnityEngine.Debug.LogWarning("[LethalMenu] Stop control on disconnect: " + ex.Message);
+		}
 		ObjectManager.ClearObjects();
 		SpectatePlayer.Reset();
 		Freecam.Reset();

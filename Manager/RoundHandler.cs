@@ -521,6 +521,15 @@ public class RoundHandler
 		{
 			outside = true; // monsters that start from a nest (the Old Bird) only exist outside
 		}
+		// Only the host's copy can be told the monster changed sides (the game has no way to send it), so on the
+		// other players' games it still thinks it's on its usual side and touching them does nothing. The Masked
+		// is fine: every game works out its side from where it stands.
+		if (outside != type.isOutsideEnemy && type.enemyPrefab != null && type.enemyPrefab.GetComponent<MaskedPlayerEnemy>() == null
+			&& type.enemyName != "Bush Wolf" && type.enemyPrefab.GetComponent<CadaverGrowthAI>() == null
+			&& PlayerHandlerExtensions.IsHost(LethalMenu.localPlayer) && StartOfRound.Instance.connectedPlayersAmount > 0)
+		{
+			HUDManager.Instance?.DisplayTip("Lethal Menu", "Spawned " + (outside ? "outside" : "inside") + ", so it can only hurt the host");
+		}
 		GameObject[] array = (outside ? RoundManager.Instance.outsideAINodes : RoundManager.Instance.insideAINodes);
 		List<Transform> nodes = new List<Transform>();
 		Array.ForEach(array, (GameObject obj) =>

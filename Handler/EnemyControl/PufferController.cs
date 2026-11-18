@@ -1,42 +1,47 @@
 using GameNetcodeStuff;
-using LethalMenu.Util;
+using HarmonyLib;
+using Control = LethalMenu.Cheats.EnemyControl;
 
 namespace LethalMenu.Handler.EnemyControl;
 
 internal class PufferController : IEnemyController<PufferAI>, IController
 {
-	private static bool playerIsInLOS;
+	private static readonly AccessTools.FieldRef<PufferAI, PlayerControllerB> ClosestSeenPlayer = AccessTools.FieldRefAccess<PufferAI, PlayerControllerB>("closestSeenPlayer");
 
-	private static PlayerControllerB player;
+	private static readonly AccessTools.FieldRef<PufferAI, bool> PlayerIsInLOS = AccessTools.FieldRefAccess<PufferAI, bool>("playerIsInLOS");
+
+	private static readonly AccessTools.FieldRef<PufferAI, float> TimeSinceLookingAtNoise = AccessTools.FieldRefAccess<PufferAI, float>("timeSinceLookingAtNoise");
+
+	public void Update(PufferAI enemy, bool isAIControlled)
+	{
+		if (isAIControlled || enemy == null)
+		{
+			return;
+		}
+		ClosestSeenPlayer(enemy) = null;
+		PlayerIsInLOS(enemy) = false;
+		TimeSinceLookingAtNoise(enemy) = 10f;
+	}
 
 	public void UsePrimarySkill(PufferAI enemy)
 	{
-		enemy.SetBehaviourState(PufferState.HOSTILE);
-		player = DressGirlController.GetClosestPlayer(enemy);
-		if (!(player == null))
+		if (!enemy.IsOwner)
 		{
-			playerIsInLOS = player;
-			enemy.Reflect().SetValue("closestSeenPlayer", player);
-			enemy.Reflect().SetValue("playerIsInLOS", playerIsInLOS);
-			enemy.StompServerRpc();
-			player = null;
-			playerIsInLOS = false;
+			return;
 		}
+		enemy.SetBehaviourState(PufferState.HOSTILE);
+		enemy.StompServerRpc();
 	}
 
 	public void UseSecondarySkill(PufferAI enemy)
 	{
-		enemy.SetBehaviourState(PufferState.HOSTILE);
-		player = DressGirlController.GetClosestPlayer(enemy);
-		if (!(player == null))
+		if (!enemy.IsOwner)
 		{
-			playerIsInLOS = player;
-			enemy.Reflect().SetValue("closestSeenPlayer", player);
-			enemy.Reflect().SetValue("playerIsInLOS", playerIsInLOS);
-			enemy.ShakeTailServerRpc();
-			player = null;
-			playerIsInLOS = false;
+			return;
 		}
+		Control.EnsureMapPropsContainer();
+		enemy.SetBehaviourState(PufferState.HOSTILE);
+		enemy.ShakeTailServerRpc();
 	}
 
 	public string GetPrimarySkillName(PufferAI _)
