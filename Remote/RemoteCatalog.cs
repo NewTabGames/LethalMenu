@@ -258,7 +258,9 @@ internal static class RemoteCatalog
 	/// <summary>Map position for the website: [x, z] to the nearest half metre (seen from above).</summary>
 	private static JArray MapPos(Vector3 p)
 	{
-		return new JArray(Math.Round(p.x * 2) / 2, Math.Round(p.z * 2) / 2);
+		// x and z place it on the map; the height (y) tells floors apart inside the building, which the map flattens
+		// onto one picture. Older websites just ignore the third number.
+		return new JArray(Math.Round(p.x * 2) / 2, Math.Round(p.z * 2) / 2, Math.Round(p.y));
 	}
 
 	/// <summary>Live snapshot; must be called on the main thread.</summary>
@@ -355,10 +357,12 @@ internal static class RemoteCatalog
 			}
 			if (map)
 			{
-				// Items lying around (not held, not in the ship), for the map's "Items" layer.
+				// Items lying around (not held, not in the ship), for the map's "Items" layer. Items the game has
+				// switched off or tucked into someone's pockets aren't really lying anywhere, so they're left out.
 				foreach (GrabbableObject item in LethalMenu.items)
 				{
-					if (item == null || item.isHeld || item.isHeldByEnemy || item.isInShipRoom || item.itemProperties == null || items.Count >= 300)
+					if (item == null || item.isHeld || item.isHeldByEnemy || item.isPocketed || item.deactivated || item.isInShipRoom
+						|| !item.gameObject.activeInHierarchy || item.itemProperties == null || items.Count >= 300)
 					{
 						continue;
 					}
