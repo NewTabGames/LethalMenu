@@ -549,8 +549,12 @@ internal static class RemoteControl
 						}
 					}, token);
 				}
-				catch (Exception ex) when (!token.IsCancellationRequested)
+				catch (Exception ex)
 				{
+					if (token.IsCancellationRequested)
+					{
+						return; // closing the game cancels the open request: not an error
+					}
 					Debug.LogWarning("[LethalMenu] Remote command stream: " + ex.Message);
 				}
 				Sleep(2000, token);
