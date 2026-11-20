@@ -389,7 +389,9 @@ internal static class RemoteCatalog
 					{
 						["n"] = item.itemProperties.itemName,
 						["v"] = item.scrapValue,
-						["i"] = item.isInFactory,
+						// By height, like the monsters: the game's isInFactory is left true on things that never went
+						// in (a bee hive starts outside with it set).
+						["i"] = item.transform.position.y < -80f,
 						["p"] = MapPos(item.transform.position)
 					});
 				}
