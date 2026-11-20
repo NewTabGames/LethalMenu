@@ -263,6 +263,19 @@ internal static class RemoteCatalog
 		return new JArray(Math.Round(p.x * 2) / 2, Math.Round(p.z * 2) / 2, Math.Round(p.y));
 	}
 
+	private static readonly HarmonyLib.AccessTools.FieldRef<Landmine, bool> MineActivated = HarmonyLib.AccessTools.FieldRefAccess<Landmine, bool>("mineActivated");
+
+	private static JObject Hazard(string type, Vector3 position, bool on)
+	{
+		return new JObject
+		{
+			["t"] = type,
+			["on"] = on,
+			["i"] = position.y < -80f,
+			["p"] = MapPos(position)
+		};
+	}
+
 	/// <summary>Live snapshot; must be called on the main thread.</summary>
 	public static JObject BuildState()
 	{
@@ -291,6 +304,7 @@ internal static class RemoteCatalog
 		// Positions only matter to the map; they change all the time, so they're only sent while it's open.
 		bool map = RemoteControl.MapWatched;
 		JArray items = new JArray();
+		JArray hazards = new JArray();
 		if (round != null)
 		{
 			game["inRound"] = true;
@@ -375,6 +389,30 @@ internal static class RemoteCatalog
 						["p"] = MapPos(item.transform.position)
 					});
 				}
+				// Traps for the map: turrets, landmines (not once they've gone off) and spike traps, and whether each
+				// is switched on (a terminal can switch them off for a while). Inside means below the surface, like
+				// the monsters.
+				foreach (Turret turret in LethalMenu.turrets)
+				{
+					if (turret != null)
+					{
+						hazards.Add(Hazard("turret", turret.transform.position, turret.turretActive));
+					}
+				}
+				foreach (Landmine mine in LethalMenu.landmines)
+				{
+					if (mine != null && !mine.hasExploded)
+					{
+						hazards.Add(Hazard("mine", mine.transform.position, MineActivated(mine)));
+					}
+				}
+				foreach (SpikeRoofTrap spikes in LethalMenu.spikeRoofTraps)
+				{
+					if (spikes != null)
+					{
+						hazards.Add(Hazard("spikes", spikes.transform.position, spikes.trapActive));
+					}
+				}
 			}
 		}
 		return new JObject
@@ -385,6 +423,7 @@ internal static class RemoteCatalog
 			["players"] = players,
 			["enemies"] = enemies,
 			["items"] = items,
+			["hazards"] = hazards,
 			// Who Spectate / Mini Cam / Demi God currently point at (player clientIds), so the website can offer "Stop".
 			["targets"] = new JObject
 			{

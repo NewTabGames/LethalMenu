@@ -140,15 +140,60 @@ internal static class RemoteMap
 				how = "ground scan";
 			}
 		}
+		// Inside levels with a big drop and no stairs between them (the Mineshaft: the elevator room sits high above
+		// the mine) are separate maps; drawn as one, the room covered the tunnels under it. Ordinary buildings have
+		// stairs between their floors and stay one map. "inside" is the biggest level (what older websites show).
+		List<List<int>> levels = SplitLevels(v, idx, inTris);
+		JObject insideGrid;
+		JArray levelsJson = null;
+		if (levels.Count > 1)
+		{
+			float[] bounds = BoundsOf(v, idx, inTris);
+			levelsJson = new JArray();
+			insideGrid = null;
+			int biggest = 0;
+			foreach (List<int> level in levels.OrderByDescending((List<int> l) => LevelY(v, idx, l, top: true)))
+			{
+				JObject grid = Rasterize(v, idx, level, bounds);
+				levelsJson.Add(new JObject
+				{
+					["top"] = Math.Round(LevelY(v, idx, level, top: true), 1),
+					["bottom"] = Math.Round(LevelY(v, idx, level, top: false), 1),
+					["grid"] = grid
+				});
+				if (level.Count > biggest)
+				{
+					biggest = level.Count;
+					insideGrid = grid;
+				}
+			}
+		}
+		else
+		{
+			insideGrid = Rasterize(v, idx, inTris);
+		}
 		JObject map = new JObject
 		{
 			["moon"] = round.currentLevel.PlanetName,
 			["seed"] = round.randomMapSeed,
 			["outside"] = outsideGrid,
-			["inside"] = Rasterize(v, idx, inTris)
+			["inside"] = insideGrid
 		};
+		if (levelsJson != null)
+		{
+			map["insideLevels"] = levelsJson;
+		}
+		MineshaftElevatorController lift = rm.currentMineshaftElevator;
+		if (lift != null && lift.elevatorTopPoint != null && lift.elevatorBottomPoint != null)
+		{
+			map["elevator"] = new JObject
+			{
+				["top"] = Point(lift.elevatorTopPoint.position),
+				["bottom"] = Point(lift.elevatorBottomPoint.position)
+			};
+		}
 		Debug.Log("[LethalMenu] Website map for " + round.currentLevel.PlanetName + ": outside " + (outsideGrid == null ? "none" : outsideGrid["w"] + "x" + outsideGrid["h"] + " (" + how + ")")
-			+ ", inside " + (map["inside"].Type == JTokenType.Null ? "none" : map["inside"]["w"] + "x" + map["inside"]["h"])
+			+ ", inside " + (map["inside"].Type == JTokenType.Null ? "none" : map["inside"]["w"] + "x" + map["inside"]["h"] + (levels.Count > 1 ? " in " + levels.Count + " levels" : ""))
 			+ "; " + outTris.Count + "/" + inTris.Count + " floor pieces, " + outside.Length + "/" + inside.Length + " AI nodes");
 		JArray doors = new JArray();
 		foreach (EntranceTeleport door in UnityEngine.Object.FindObjectsOfType<EntranceTeleport>())
@@ -162,6 +207,7 @@ internal static class RemoteMap
 			{
 				["x"] = Math.Round(p.x, 1),
 				["z"] = Math.Round(p.z, 1),
+				["y"] = Math.Round(p.y, 1),
 				["inside"] = !door.isEntranceToBuilding,
 				["main"] = door.entranceId == 0
 			});
@@ -251,12 +297,63 @@ internal static class RemoteMap
 	/// a letter for the value (a = no floor, b-e = floor from low to high) and how many cells in a row have it,
 	/// row by row from the lowest z. Null when there is no floor at all.
 	/// </summary>
-	private static JObject Rasterize(Vector3[] v, int[] idx, List<int> tris)
+	/// <summary>Height gap with no floor at all in between that makes two separate levels.</summary>
+	private const float LevelGap = 12f;
+
+	/// <summary>
+	/// Groups floor pieces into levels: sorted by height, a new level starts wherever the next piece is more than
+	/// LevelGap higher with nothing in between. Stairs and ramps fill the heights between a building's floors, so
+	/// only a real drop (an elevator shaft) splits. Tiny groups (a ledge, a stray piece) join the level next to them.
+	/// </summary>
+	private static List<List<int>> SplitLevels(Vector3[] v, int[] idx, List<int> tris)
 	{
+		List<List<int>> levels = new List<List<int>>();
 		if (tris.Count == 0)
 		{
-			return null;
+			return levels;
 		}
+		List<int> sorted = tris.OrderBy((int t) => (v[idx[t]].y + v[idx[t + 1]].y + v[idx[t + 2]].y) / 3f).ToList();
+		List<int> current = new List<int>();
+		float last = float.NaN;
+		foreach (int t in sorted)
+		{
+			float y = (v[idx[t]].y + v[idx[t + 1]].y + v[idx[t + 2]].y) / 3f;
+			if (!float.IsNaN(last) && y - last > LevelGap)
+			{
+				levels.Add(current);
+				current = new List<int>();
+			}
+			current.Add(t);
+			last = y;
+		}
+		levels.Add(current);
+		for (int i = levels.Count - 1; i >= 0 && levels.Count > 1; i--)
+		{
+			if (levels[i].Count < 40)
+			{
+				levels[i > 0 ? i - 1 : i + 1].AddRange(levels[i]);
+				levels.RemoveAt(i);
+			}
+		}
+		return levels;
+	}
+
+	private static float LevelY(Vector3[] v, int[] idx, List<int> tris, bool top)
+	{
+		float y = top ? float.MinValue : float.MaxValue;
+		foreach (int t in tris)
+		{
+			for (int k = 0; k < 3; k++)
+			{
+				y = top ? Mathf.Max(y, v[idx[t + k]].y) : Mathf.Min(y, v[idx[t + k]].y);
+			}
+		}
+		return y;
+	}
+
+	/// <summary>minX, minZ, maxX, maxZ of the floor pieces, with a small margin.</summary>
+	private static float[] BoundsOf(Vector3[] v, int[] idx, List<int> tris)
+	{
 		float minX = float.MaxValue, maxX = float.MinValue, minZ = float.MaxValue, maxZ = float.MinValue;
 		foreach (int t in tris)
 		{
@@ -267,7 +364,23 @@ internal static class RemoteMap
 				minZ = Mathf.Min(minZ, p.z); maxZ = Mathf.Max(maxZ, p.z);
 			}
 		}
-		minX -= 2f; minZ -= 2f; maxX += 2f; maxZ += 2f;
+		return new float[4] { minX - 2f, minZ - 2f, maxX + 2f, maxZ + 2f };
+	}
+
+	private static JArray Point(Vector3 p)
+	{
+		return new JArray(Math.Round(p.x * 2) / 2, Math.Round(p.z * 2) / 2, Math.Round(p.y));
+	}
+
+	/// <summary>Floor picture of these pieces. Levels of one building share the same bounds so they line up.</summary>
+	private static JObject Rasterize(Vector3[] v, int[] idx, List<int> tris, float[] bounds = null)
+	{
+		if (tris.Count == 0)
+		{
+			return null;
+		}
+		float[] box = bounds ?? BoundsOf(v, idx, tris);
+		float minX = box[0], minZ = box[1], maxX = box[2], maxZ = box[3];
 		float cell = Mathf.Max(MinCellSize, Mathf.Max(maxX - minX, maxZ - minZ) / MaxCells);
 		int w = Mathf.CeilToInt((maxX - minX) / cell) + 1;
 		int h = Mathf.CeilToInt((maxZ - minZ) / cell) + 1;

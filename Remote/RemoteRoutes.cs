@@ -76,7 +76,8 @@ internal static class RemoteRoutes
 		}
 		Vector3[]? best = null;
 		float bestLength = float.MaxValue;
-		bool bestMain = false;
+		float shownLength = 0f;
+		string bestTo = "main";
 		foreach (EntranceTeleport door in doors)
 		{
 			// A door inside the building is a way out; one outside is a way in.
@@ -84,25 +85,31 @@ internal static class RemoteRoutes
 			{
 				continue;
 			}
-			if (!NavMesh.SamplePosition(door.transform.position, out NavMeshHit end, 4f, NavMesh.AllAreas))
+			if (!Walk(start.position, door.transform.position, out Vector3[] corners, out float length))
 			{
 				continue;
-			}
-			if (!NavMesh.CalculatePath(start.position, end.position, NavMesh.AllAreas, Path) || Path.status != NavMeshPathStatus.PathComplete)
-			{
-				continue;
-			}
-			Vector3[] corners = Path.corners;
-			float length = 0f;
-			for (int i = 1; i < corners.Length; i++)
-			{
-				length += Vector3.Distance(corners[i - 1], corners[i]);
 			}
 			if (length < bestLength)
 			{
 				bestLength = length;
+				shownLength = length;
 				best = corners;
-				bestMain = door.entranceId == 0;
+				bestTo = door.entranceId == 0 ? "main" : "fire";
+			}
+		}
+		// The Mineshaft: down in the mine, the way out may be up the elevator (it isn't walkable floor, so no route
+		// goes through it). Compared by the whole trip: to the elevator, then from its top to the nearest door.
+		MineshaftElevatorController lift = RoundManager.Instance != null ? RoundManager.Instance.currentMineshaftElevator : null;
+		if (inside && lift != null && lift.elevatorBottomPoint != null && lift.elevatorTopPoint != null && from.y < lift.elevatorTopPoint.position.y - 8f
+			&& Walk(start.position, lift.elevatorBottomPoint.position, out Vector3[] toLift, out float liftLength))
+		{
+			float fromTop = TopToDoor(lift);
+			if (liftLength + fromTop < bestLength)
+			{
+				bestLength = liftLength + fromTop;
+				shownLength = liftLength;
+				best = toLift;
+				bestTo = "elevator";
 			}
 		}
 		if (best == null || best.Length < 2)
@@ -116,9 +123,58 @@ internal static class RemoteRoutes
 		}
 		return new JObject
 		{
-			["main"] = bestMain,
-			["m"] = Math.Round(bestLength),
+			["to"] = bestTo,
+			["main"] = bestTo == "main",
+			["m"] = Math.Round(shownLength),
 			["pts"] = points
 		};
+	}
+
+	/// <summary>A complete walking route between two spots (each moved onto the walkable floor), and its length.</summary>
+	private static bool Walk(Vector3 from, Vector3 to, out Vector3[] corners, out float length)
+	{
+		corners = new Vector3[0];
+		length = 0f;
+		if (!NavMesh.SamplePosition(to, out NavMeshHit end, 4f, NavMesh.AllAreas)
+			|| !NavMesh.CalculatePath(from, end.position, NavMesh.AllAreas, Path) || Path.status != NavMeshPathStatus.PathComplete)
+		{
+			return false;
+		}
+		corners = Path.corners;
+		for (int i = 1; i < corners.Length; i++)
+		{
+			length += Vector3.Distance(corners[i - 1], corners[i]);
+		}
+		return true;
+	}
+
+	private static MineshaftElevatorController? topToDoorLift;
+
+	private static float topToDoorLength;
+
+	private static float topToDoorAt = -100f;
+
+	/// <summary>Walk from the top of the Mineshaft elevator to the nearest way out (worked out every 30 s).</summary>
+	private static float TopToDoor(MineshaftElevatorController lift)
+	{
+		if (topToDoorLift == lift && Time.unscaledTime - topToDoorAt < 30f)
+		{
+			return topToDoorLength;
+		}
+		float bestLength = 1000f; // no way out from up there found: only take the elevator if nothing else works
+		if (NavMesh.SamplePosition(lift.elevatorTopPoint.position, out NavMeshHit top, 4f, NavMesh.AllAreas))
+		{
+			foreach (EntranceTeleport door in doors)
+			{
+				if (door != null && !door.isEntranceToBuilding && Walk(top.position, door.transform.position, out Vector3[] _, out float length))
+				{
+					bestLength = Mathf.Min(bestLength, length);
+				}
+			}
+		}
+		topToDoorLift = lift;
+		topToDoorLength = bestLength;
+		topToDoorAt = Time.unscaledTime;
+		return bestLength;
 	}
 }
