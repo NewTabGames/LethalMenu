@@ -232,6 +232,7 @@ internal static class RemoteControl
 		if (Status == RemoteStatus.Connected && Time.unscaledTime >= nextCatalogAt)
 		{
 			nextCatalogAt = Time.unscaledTime + 5f;
+			long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
 			try
 			{
 				latestCatalog = RemoteCatalog.BuildCatalog(live: true).ToString(Formatting.None);
@@ -240,14 +241,18 @@ internal static class RemoteControl
 			{
 				Settings.debugMessage = "Remote catalog: " + ex.Message;
 			}
+			ReportIfSlow("feature list", t0);
 		}
 		if (Status == RemoteStatus.Connected)
 		{
+			long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
 			RemoteMap.Tick();
+			ReportIfSlow("map", t0);
 		}
 		if (Status == RemoteStatus.Connected && Time.unscaledTime >= nextStateAt)
 		{
 			nextStateAt = Time.unscaledTime + 0.5f;
+			long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
 			try
 			{
 				latestState = RemoteCatalog.BuildState().ToString(Formatting.None);
@@ -256,6 +261,17 @@ internal static class RemoteControl
 			{
 				Settings.debugMessage = "Remote state: " + ex.Message;
 			}
+			ReportIfSlow("live state", t0);
+		}
+	}
+
+	/// <summary>Logs website work that held up a frame (a noticeable hitch), so lag spikes can be traced.</summary>
+	private static void ReportIfSlow(string what, long started)
+	{
+		double ms = (System.Diagnostics.Stopwatch.GetTimestamp() - started) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+		if (ms > 30.0)
+		{
+			Debug.LogWarning("[LethalMenu] Website " + what + " took " + Math.Round(ms) + " ms this frame");
 		}
 	}
 

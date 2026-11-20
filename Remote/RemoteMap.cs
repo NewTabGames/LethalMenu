@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
@@ -27,15 +28,64 @@ internal static class RemoteMap
 
 	private static string builtFor;
 
+	/// <summary>Which landing Latest is the map of.</summary>
+	private static volatile string readyFor;
+
 	private static float nextCheck;
 
 	/// <summary>The map as JSON, waiting to be uploaded (read by the network thread).</summary>
 	public static volatile string Latest;
 
-	/// <summary>Main thread. Builds a new map after landing on a moon (once per moon and day).</summary>
+	/// <summary>A map being worked out on a background thread right now.</summary>
+	private static volatile bool building;
+
+	/// <summary>Everything the background part needs, read from the game on the main thread.</summary>
+	private sealed class Input
+	{
+		public string Key;
+		public string Moon;
+		public int Seed;
+		public Vector3[] V;
+		public int[] Idx;
+		public Vector3[] Inside;
+		public Vector3[] Outside;
+		public Vector3? Ship;
+		public JObject Elevator;
+		public JArray Doors;
+	}
+
+	/// <summary>A map (no walk floor outside: the Company) waiting for its ground scan, done a few rows a frame.</summary>
+	private sealed class Scan
+	{
+		public string Key;
+		public JObject Map;
+		public string Note;
+		public string Rest;
+		public Bounds Area;
+		public float Cell;
+		public int W;
+		public int H;
+		public int Row;
+		public int Found;
+		public float[] Height;
+	}
+
+	private static volatile Scan pendingScan;
+
+	/// <summary>
+	/// Main thread. Builds a new map after landing on a moon (once per moon and day). Only reading the walk floor
+	/// from the game happens here; painting it onto the grid and turning it into text (the slow part, which used to
+	/// stutter the game for a moment after landing) runs on a background thread.
+	/// </summary>
 	public static void Tick()
 	{
-		if (Time.unscaledTime < nextCheck)
+		Scan scan = pendingScan;
+		if (scan != null)
+		{
+			ScanSomeRows(scan);
+			return;
+		}
+		if (building || Time.unscaledTime < nextCheck)
 		{
 			return;
 		}
@@ -56,14 +106,32 @@ internal static class RemoteMap
 			return;
 		}
 		builtFor = key;
+		Input input;
 		try
 		{
-			Latest = Build(round, rm).ToString(Formatting.None);
+			input = Gather(round, rm, key);
 		}
 		catch (Exception ex)
 		{
 			Debug.LogWarning("[LethalMenu] Couldn't build the website map: " + ex.Message);
+			return;
 		}
+		building = true;
+		ThreadPool.QueueUserWorkItem(delegate
+		{
+			try
+			{
+				Build(input);
+			}
+			catch (Exception ex)
+			{
+				Debug.LogWarning("[LethalMenu] Couldn't build the website map: " + ex.Message);
+			}
+			finally
+			{
+				building = false;
+			}
+		});
 	}
 
 	/// <summary>
@@ -74,22 +142,79 @@ internal static class RemoteMap
 	public static bool ReadyForCurrent()
 	{
 		StartOfRound round = StartOfRound.Instance;
-		return round != null && round.currentLevel != null && Latest != null && builtFor == round.currentLevel.name + "|" + round.randomMapSeed;
+		return round != null && round.currentLevel != null && Latest != null && readyFor == round.currentLevel.name + "|" + round.randomMapSeed;
 	}
 
 	public static void Reset()
 	{
 		builtFor = null;
+		readyFor = null;
+		pendingScan = null;
 		Latest = null;
 	}
 
-	private static JObject Build(StartOfRound round, RoundManager rm)
+	/// <summary>Hands a finished map to the uploader, unless a newer landing has started since.</summary>
+	private static void Publish(string key, JObject map, string note)
+	{
+		if (key != builtFor)
+		{
+			return;
+		}
+		Latest = map.ToString(Formatting.None);
+		readyFor = key;
+		Debug.Log(note);
+	}
+
+	private static Input Gather(StartOfRound round, RoundManager rm, string key)
 	{
 		NavMeshTriangulation tri = NavMesh.CalculateTriangulation();
-		Vector3[] v = tri.vertices;
-		int[] idx = tri.indices;
-		Vector3[] inside = Nodes(rm.insideAINodes);
-		Vector3[] outside = Nodes(rm.outsideAINodes);
+		Input input = new Input
+		{
+			Key = key,
+			Moon = round.currentLevel.PlanetName,
+			Seed = round.randomMapSeed,
+			V = tri.vertices,
+			Idx = tri.indices,
+			Inside = Nodes(rm.insideAINodes),
+			Outside = Nodes(rm.outsideAINodes),
+			Ship = round.elevatorTransform != null ? round.elevatorTransform.position : (Vector3?)null,
+			Doors = new JArray()
+		};
+		MineshaftElevatorController lift = rm.currentMineshaftElevator;
+		if (lift != null && lift.elevatorTopPoint != null && lift.elevatorBottomPoint != null)
+		{
+			input.Elevator = new JObject
+			{
+				["top"] = Point(lift.elevatorTopPoint.position),
+				["bottom"] = Point(lift.elevatorBottomPoint.position)
+			};
+		}
+		foreach (EntranceTeleport door in UnityEngine.Object.FindObjectsOfType<EntranceTeleport>())
+		{
+			if (door == null)
+			{
+				continue;
+			}
+			Vector3 p = door.transform.position;
+			input.Doors.Add(new JObject
+			{
+				["x"] = Math.Round(p.x, 1),
+				["z"] = Math.Round(p.z, 1),
+				["y"] = Math.Round(p.y, 1),
+				["inside"] = !door.isEntranceToBuilding,
+				["main"] = door.entranceId == 0
+			});
+		}
+		return input;
+	}
+
+	/// <summary>Background thread: no game objects in here, only the numbers Gather read.</summary>
+	private static void Build(Input input)
+	{
+		Vector3[] v = input.V;
+		int[] idx = input.Idx;
+		Vector3[] inside = input.Inside;
+		Vector3[] outside = input.Outside;
 
 		// Usually the facility sits far below the moon's surface, so a height split is enough; when it isn't,
 		// fall back to the nearest AI node.
@@ -100,7 +225,7 @@ internal static class RemoteMap
 
 		// Where the map can be: around the AI nodes (and the ship, outside). Floor pieces far away from all of
 		// them (scenery, bits under the sea) would otherwise stretch the map until the real part is a tiny dot.
-		Vector3? shipPos = round.elevatorTransform != null ? round.elevatorTransform.position : (Vector3?)null;
+		Vector3? shipPos = input.Ship;
 		Bounds? outArea = Area(outside, shipPos, 80f);
 		Bounds? inArea = Area(inside, null, 30f);
 
@@ -140,17 +265,9 @@ internal static class RemoteMap
 		}
 
 		JObject outsideGrid = Rasterize(v, idx, outTris);
-		string how = "walk floor";
-		if (outTris.Count < 20 && outArea.HasValue)
-		{
-			// Hardly any walk floor outside (the Company has almost none): scan the ground from above instead.
-			JObject scanned = ScanGround(outArea.Value);
-			if (scanned != null)
-			{
-				outsideGrid = scanned;
-				how = "ground scan";
-			}
-		}
+		// Hardly any walk floor outside (the Company has almost none): the ground gets scanned from above instead,
+		// back on the main thread (rays can't be cast from here).
+		bool scanGround = outTris.Count < 20 && outArea.HasValue;
 		// Inside levels with a big drop and no stairs between them (the Mineshaft: the elevator room sits high above
 		// the mine) are separate maps; drawn as one, the room covered the tunnels under it. Ordinary buildings have
 		// stairs between their floors and stay one map. "inside" is the biggest level (what older websites show).
@@ -185,8 +302,8 @@ internal static class RemoteMap
 		}
 		JObject map = new JObject
 		{
-			["moon"] = round.currentLevel.PlanetName,
-			["seed"] = round.randomMapSeed,
+			["moon"] = input.Moon,
+			["seed"] = input.Seed,
 			["outside"] = outsideGrid,
 			["inside"] = insideGrid
 		};
@@ -194,37 +311,24 @@ internal static class RemoteMap
 		{
 			map["insideLevels"] = levelsJson;
 		}
-		MineshaftElevatorController lift = rm.currentMineshaftElevator;
-		if (lift != null && lift.elevatorTopPoint != null && lift.elevatorBottomPoint != null)
+		if (input.Elevator != null)
 		{
-			map["elevator"] = new JObject
-			{
-				["top"] = Point(lift.elevatorTopPoint.position),
-				["bottom"] = Point(lift.elevatorBottomPoint.position)
-			};
+			map["elevator"] = input.Elevator;
 		}
-		Debug.Log("[LethalMenu] Website map for " + round.currentLevel.PlanetName + ": outside " + (outsideGrid == null ? "none" : outsideGrid["w"] + "x" + outsideGrid["h"] + " (" + how + ")")
-			+ ", inside " + (map["inside"].Type == JTokenType.Null ? "none" : map["inside"]["w"] + "x" + map["inside"]["h"] + (levels.Count > 1 ? " in " + levels.Count + " levels" : ""))
-			+ "; " + outTris.Count + "/" + inTris.Count + " floor pieces, " + outside.Length + "/" + inside.Length + " AI nodes");
-		JArray doors = new JArray();
-		foreach (EntranceTeleport door in UnityEngine.Object.FindObjectsOfType<EntranceTeleport>())
+		map["doors"] = input.Doors;
+		string rest = ", inside " + (map["inside"].Type == JTokenType.Null ? "none" : map["inside"]["w"] + "x" + map["inside"]["h"] + (levels.Count > 1 ? " in " + levels.Count + " levels" : ""))
+			+ "; " + outTris.Count + "/" + inTris.Count + " floor pieces, " + outside.Length + "/" + inside.Length + " AI nodes";
+		string walk = "[LethalMenu] Website map for " + input.Moon + ": outside " + (outsideGrid == null ? "none" : outsideGrid["w"] + "x" + outsideGrid["h"] + " (walk floor)") + rest;
+		if (scanGround)
 		{
-			if (door == null)
-			{
-				continue;
-			}
-			Vector3 p = door.transform.position;
-			doors.Add(new JObject
-			{
-				["x"] = Math.Round(p.x, 1),
-				["z"] = Math.Round(p.z, 1),
-				["y"] = Math.Round(p.y, 1),
-				["inside"] = !door.isEntranceToBuilding,
-				["main"] = door.entranceId == 0
-			});
+			Bounds area = outArea.Value;
+			float cell = Mathf.Max(MinCellSize, Mathf.Max(area.size.x, area.size.z) / MaxCells);
+			int w = Mathf.CeilToInt(area.size.x / cell) + 1;
+			int h = Mathf.CeilToInt(area.size.z / cell) + 1;
+			pendingScan = new Scan { Key = input.Key, Map = map, Note = walk, Rest = rest, Area = area, Cell = cell, W = w, H = h, Height = new float[w * h] };
+			return;
 		}
-		map["doors"] = doors;
-		return map;
+		Publish(input.Key, map, walk);
 	}
 
 	/// <summary>The box around these points (and the extra one), grown by margin metres. Null with no points.</summary>
@@ -255,33 +359,62 @@ internal static class RemoteMap
 	/// <summary>
 	/// Map without walk floor: a ray straight down in every cell. Rays start just above the highest AI node / the
 	/// ship, under most roofs, so the floor inside buildings shows too. Only fairly flat ground counts as floor.
+	/// About 3000 rays a frame (all of them at once was a hitch), then finished off on a background thread.
 	/// </summary>
-	private static JObject ScanGround(Bounds area)
+	private static void ScanSomeRows(Scan scan)
 	{
-		float cell = Mathf.Max(MinCellSize, Mathf.Max(area.size.x, area.size.z) / MaxCells);
-		int w = Mathf.CeilToInt(area.size.x / cell) + 1;
-		int h = Mathf.CeilToInt(area.size.z / cell) + 1;
+		if (scan.Key != builtFor)
+		{
+			pendingScan = null;
+			return;
+		}
 		int mask = StartOfRound.Instance != null ? StartOfRound.Instance.collidersAndRoomMaskAndDefault : Physics.DefaultRaycastLayers;
 		// area was grown by the margin on y too: its top is about margin metres above the highest point.
-		float top = area.max.y - 80f + 4f;
+		float top = scan.Area.max.y - 80f + 4f;
 		float depth = 60f;
-		float[] height = new float[w * h];
-		int found = 0;
-		for (int cz = 0; cz < h; cz++)
+		int last = Mathf.Min(scan.H, scan.Row + Mathf.Max(1, 3000 / scan.W));
+		for (; scan.Row < last; scan.Row++)
 		{
-			for (int cx = 0; cx < w; cx++)
+			int cz = scan.Row;
+			for (int cx = 0; cx < scan.W; cx++)
 			{
-				int i = cz * w + cx;
-				height[i] = float.NaN;
-				Vector3 from = new Vector3(area.min.x + (cx + 0.5f) * cell, top, area.min.z + (cz + 0.5f) * cell);
+				int i = cz * scan.W + cx;
+				scan.Height[i] = float.NaN;
+				Vector3 from = new Vector3(scan.Area.min.x + (cx + 0.5f) * scan.Cell, top, scan.Area.min.z + (cz + 0.5f) * scan.Cell);
 				if (Physics.Raycast(from, Vector3.down, out RaycastHit hit, depth, mask, QueryTriggerInteraction.Ignore) && hit.normal.y > 0.6f)
 				{
-					height[i] = hit.point.y;
-					found++;
+					scan.Height[i] = hit.point.y;
+					scan.Found++;
 				}
 			}
 		}
-		return found < 20 ? null : Encode(height, w, h, area.min.x, area.min.z, cell);
+		if (scan.Row < scan.H)
+		{
+			return;
+		}
+		pendingScan = null;
+		building = true;
+		ThreadPool.QueueUserWorkItem(delegate
+		{
+			try
+			{
+				string note = scan.Note;
+				if (scan.Found >= 20)
+				{
+					scan.Map["outside"] = Encode(scan.Height, scan.W, scan.H, scan.Area.min.x, scan.Area.min.z, scan.Cell);
+					note = "[LethalMenu] Website map for " + scan.Map["moon"] + ": outside " + scan.W + "x" + scan.H + " (ground scan)" + scan.Rest;
+				}
+				Publish(scan.Key, scan.Map, note);
+			}
+			catch (Exception ex)
+			{
+				Debug.LogWarning("[LethalMenu] Couldn't build the website map: " + ex.Message);
+			}
+			finally
+			{
+				building = false;
+			}
+		});
 	}
 
 	private static Vector3[] Nodes(GameObject[] nodes)
