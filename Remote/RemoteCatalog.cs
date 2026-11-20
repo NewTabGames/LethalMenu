@@ -305,6 +305,7 @@ internal static class RemoteCatalog
 		bool map = RemoteControl.MapWatched;
 		JArray items = new JArray();
 		JArray hazards = new JArray();
+		JArray dormant = new JArray();
 		if (round != null)
 		{
 			game["inRound"] = true;
@@ -319,6 +320,7 @@ internal static class RemoteCatalog
 			}
 			// Which map the website should show (RemoteMap sends it once per landing).
 			game["mapSeed"] = round.randomMapSeed;
+			game["mapReady"] = RemoteMap.ReadyForCurrent();
 			if (TimeOfDay.Instance != null)
 			{
 				game["quota"] = TimeOfDay.Instance.profitQuota;
@@ -413,6 +415,23 @@ internal static class RemoteCatalog
 						hazards.Add(Hazard("spikes", spikes.transform.position, spikes.trapActive));
 					}
 				}
+				// Dormant monsters: an Old Bird sitting in its nest isn't a monster yet (just the nest), so it wasn't in
+				// the monster list or on the map until it woke up.
+				if (RoundManager.Instance != null)
+				{
+					foreach (EnemyAINestSpawnObject nest in RoundManager.Instance.enemyNestSpawnObjects)
+					{
+						if (nest != null && nest.enemyType != null)
+						{
+							dormant.Add(new JObject
+							{
+								["n"] = Handler.EnemyAIExtensions.ShownName(nest.enemyType.enemyName),
+								["i"] = nest.transform.position.y < -80f,
+								["p"] = MapPos(nest.transform.position)
+							});
+						}
+					}
+				}
 			}
 		}
 		return new JObject
@@ -424,6 +443,7 @@ internal static class RemoteCatalog
 			["enemies"] = enemies,
 			["items"] = items,
 			["hazards"] = hazards,
+			["dormant"] = dormant,
 			// Who Spectate / Mini Cam / Demi God currently point at (player clientIds), so the website can offer "Stop".
 			["targets"] = new JObject
 			{

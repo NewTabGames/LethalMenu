@@ -66,6 +66,17 @@ internal static class RemoteMap
 		}
 	}
 
+	/// <summary>
+	/// Whether the map for the landing you're on now has been made. It's made a couple of seconds after the ship
+	/// lands (and the building is there); until then the website says it's building the map instead of showing the
+	/// previous moon's.
+	/// </summary>
+	public static bool ReadyForCurrent()
+	{
+		StartOfRound round = StartOfRound.Instance;
+		return round != null && round.currentLevel != null && Latest != null && builtFor == round.currentLevel.name + "|" + round.randomMapSeed;
+	}
+
 	public static void Reset()
 	{
 		builtFor = null;
