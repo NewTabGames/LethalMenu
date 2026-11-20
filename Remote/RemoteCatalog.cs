@@ -352,7 +352,9 @@ internal static class RemoteCatalog
 						["inside"] = player.isInsideFactory,
 						["item"] = player.currentlyHeldObjectServer != null && player.currentlyHeldObjectServer.itemProperties != null ? player.currentlyHeldObjectServer.itemProperties.itemName : null,
 						["pos"] = map ? MapPos(player.isPlayerDead && player.deadBody != null ? player.deadBody.transform.position : player.transform.position) : null,
-						["route"] = map ? RemoteRoutes.For(player, i) : null
+						["route"] = map ? RemoteRoutes.For(player, i) : null,
+						// Which way they face (degrees, 0 = north / up on the map), for the arrow next to their dot.
+						["yaw"] = map ? Math.Round(player.transform.eulerAngles.y) : (double?)null
 					});
 				}
 			}
