@@ -335,7 +335,8 @@ internal static class RemoteCatalog
 						["local"] = player == local,
 						["inside"] = player.isInsideFactory,
 						["item"] = player.currentlyHeldObjectServer != null && player.currentlyHeldObjectServer.itemProperties != null ? player.currentlyHeldObjectServer.itemProperties.itemName : null,
-						["pos"] = map ? MapPos(player.isPlayerDead && player.deadBody != null ? player.deadBody.transform.position : player.transform.position) : null
+						["pos"] = map ? MapPos(player.isPlayerDead && player.deadBody != null ? player.deadBody.transform.position : player.transform.position) : null,
+						["route"] = map ? RemoteRoutes.For(player, i) : null
 					});
 				}
 			}
